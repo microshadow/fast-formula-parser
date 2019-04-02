@@ -54,6 +54,7 @@ const TextFunctions = {
         // Important: In Excel 2016, Excel Mobile, and Excel Online, this function has been replaced with the CONCAT function.
         // Although the CONCATENATE function is still available for backward compatibility,
         // you should consider using CONCAT from now on. This is because CONCATENATE may not be available in future versions of Excel.
+        return TextFunctions.CONCAT(...params);
     },
 
     DBCS: (...params) => {
@@ -104,17 +105,7 @@ const TextFunctions = {
     FINDB: (find_text, within_text) => {
         find_text = H.accept(find_text, [Types.STRING]);
         within_text = H.accept(within_text, [Types.STRING]);
-
-        if (find_text === "") {
-            return 1;
-        }
-
-        for (let i = 0; i < within_text.length; i++) {
-            if (find_text === within_text[i]) {
-                return i + 1;
-            }
-        }
-        return "#VALUE!";
+        return TextFunctions.FIND(find_text, within_text);
     },
 
     FIXED: (number, decimals) => {
@@ -151,16 +142,7 @@ const TextFunctions = {
 
     LEFTB: (text, num_bytes) => {
         text = H.accept(text, [Types.STRING]);
-        let str = "";
-
-        if (!num_bytes) {
-            return text[0];
-        }
-
-        for (let i = 0; i < num_bytes; i++){
-            str += text[i];
-        }
-        return str;
+        TextFunctions.LEFTB(text, num_bytes)
     },
 
     LEN: (text) => {
@@ -170,7 +152,7 @@ const TextFunctions = {
 
     LENB: (text) => {
         text = H.accept(text, [Types.STRING]);
-        return text.length;
+        return TextFunctions.LENB(text);
     },
 
     LOWER: (text) => {
@@ -194,12 +176,7 @@ const TextFunctions = {
         text = H.accept(text, [Types.STRING]);
         start_num = H.accept(start_num, [Types.NUMBER]);
         num_chars = H.accept(num_chars, [Types.NUMBER]);
-        let str = "";
-
-        for (let i = start_num - 1; i < num_chars; i++){
-            str += text[i];
-        }
-        return str;
+        return TextFunctions.MIDtext,start_num,num_chars();
     },
 
     NUMBERVALUE: (text, decimal_separator, group_separator) => {
