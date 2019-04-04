@@ -1,10 +1,12 @@
-const TextFormulas = require('./formulas/text');
-const MathFormulas = require('./formulas/math');
-const FormulaError = require('./formulas/error');
-const {FormulaHelpers} = require('./formulas/helpers');
-const {Parser, allTokens} = require('./parsing2');
+const TextFunctions = require('../formulas/functions/text');
+const MathFunctions = require('../formulas/functions/math');
+const TrigFunctions = require('../formulas/functions/trigonometry');
+const LogicalFunctions = require('../formulas/functions/logical');
+const FormulaError = require('../formulas/error');
+const {FormulaHelpers} = require('../formulas/helpers');
+const {Parser, allTokens} = require('./parsing');
 const lexer = require('./lexing');
-const Utils = require('./utils/utils');
+const Utils = require('./utils');
 
 class FormulaParser {
 
@@ -22,9 +24,17 @@ class FormulaParser {
         }, config);
 
         this.variables = config.variables;
-        this.functions = Object.assign({}, TextFormulas, MathFormulas, config.functions);
+        this.functions = Object.assign({},
+            LogicalFunctions, TextFunctions, MathFunctions, TrigFunctions, config.functions);
         this.onRange = config.onRange;
         this.onCell = config.onCell;
+
+        // functions treat null as 0
+        this.funsNullAs0 = Object.keys(MathFunctions)
+            .concat(Object.keys(TrigFunctions))
+            .concat(Object.keys(LogicalFunctions));
+        // functions treat null as ""
+        this.funsNullAsString = Object.keys(TextFunctions);
 
         // uses ES5 syntax here... I don't want to transpile the code...
         this.getCell = (ref) => {
@@ -50,14 +60,19 @@ class FormulaParser {
             // console.log('get variable', name);
             const val = this.variables[name];
             if (val === undefined || val === null)
-                throw FormulaError.NAME;
+                return FormulaError.NAME;
             return val;
         };
 
         this.callFunction = (name, args) => {
             name = name.toUpperCase();
+            // if one arg is null, it means 0 or "" depends on the function it calls
+            const nullValue = this.funsNullAs0.includes(name) ? 0 : '';
+
             // retrieve reference
             args = args.map(arg => {
+                if (arg === null)
+                    return {value: nullValue, isArray: false, omitted: true};
                 const res = this.utils.extractRefValue(arg);
                 return {value: res.val, isArray: res.isArray};
             });
@@ -65,9 +80,19 @@ class FormulaParser {
             // console.log('callFunction', name, args)
 
             if (this.functions[name]) {
-                const res = (this.functions[name](...args));
+                let res;
+                try {
+                    res = (this.functions[name](...args));
+                } catch (e) {
+                    // allow functions throw FormulaError, this make functions easier to implement!
+                    if (e instanceof FormulaError) {
+                        return e;
+                    } else {
+                        throw e;
+                    }
+                }
                 if (res === undefined) {
-                    // console.log(`Function ${name} is not implemented`)
+                    // console.log(`Function ${name} may be not implemented.`);
                     return {value: 0, ref: {}};
                 }
                 return FormulaHelpers.checkFunctionResult(res);
@@ -76,8 +101,6 @@ class FormulaParser {
                 // console.log(`Function ${name} is not implemented`)
                 return {value: 0, ref: {}};
             }
-            // throw Error()
-            // return
         };
 
         this.retrieveRef = value => {
@@ -107,7 +130,7 @@ class FormulaParser {
                 if (res === undefined) return;
                 supported.push(fun);
             } catch (e) {
-                if (e instanceof FormulaError)
+                if (e instanceof FormulaError || e instanceof TypeError)
                     supported.push(fun);
                 // else
                 //     console.log(e)
@@ -121,18 +144,24 @@ class FormulaParser {
         // number
         if (type === 'number') {
             if (isNaN(result)) {
-                throw FormulaError.VALUE;
+                return FormulaError.VALUE;
+            } else if (!isFinite(result)) {
+                return FormulaError.NUM;
             }
+            result += 0; // make -0 to 0
         }
         else if (type === 'boolean')
-            return result ? 'TRUE' : 'FALSE';
+            result = result ? 'TRUE' : 'FALSE';
         else if (type === 'object') {
+            if (result instanceof FormulaError)
+                return result;
             if (result.ref && !result.ref.from) {
                 // single cell reference
-                return this.retrieveRef(result).val;
+                result = this.retrieveRef(result);
+            } else {
+                // array, range reference, union collections
+                return FormulaError.VALUE;
             }
-            // array, range reference, union collections
-            throw FormulaError.VALUE;
         }
         return result;
     }
@@ -149,10 +178,11 @@ class FormulaParser {
         try {
             res = this.parser.formulaWithCompareOp();
             res = this.checkFormulaResult(res);
+            if (res instanceof FormulaError) {
+                return {result: res.toString(), detail: ''};
+            }
         } catch (e) {
             // console.log(e);
-            if (e instanceof FormulaError)
-                return {result: e.toString(), detail: ''};
             throw e;
         }
         if (this.parser.errors.length > 0) {

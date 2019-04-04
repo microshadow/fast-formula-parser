@@ -1,6 +1,7 @@
 const FormulaError = require('../formulas/error');
 const {FormulaHelpers, Types} = require('../formulas/helpers');
 const {Prefix, Postfix, Infix, Operators} = require('../formulas/operators');
+const MAX_ROW = 1048576, MAX_COLUMN = 16384;
 
 class Utils {
 
@@ -38,39 +39,56 @@ class Utils {
         };
     }
 
-    parseColRange(colRange) {
-        const res = colRange.match(/([$]?)([A-Za-z]{1,3}):([$]?)([A-Za-z]{1,4})/);
+    parseRow(row) {
+        const rowNum = +row;
+        if (!Number.isInteger(rowNum))
+            throw Error('Row number must be integer.');
         return {
             ref: {
-                address: res[0],
+                col: undefined,
+                row: +row
+            },
+        };
+    }
+
+    parseCol(col) {
+        return {
+            ref: {
+                col: this.columnNameToNumber(col),
+                row: undefined,
+            },
+        };
+    }
+
+    parseColRange(col1, col2) {
+        // const res = colRange.match(/([$]?)([A-Za-z]{1,3}):([$]?)([A-Za-z]{1,4})/);
+        col1 = this.columnNameToNumber(col1);
+        col2 = this.columnNameToNumber(col2);
+        return {
+            ref: {
                 from: {
-                    address: res[2],
-                    col: this.columnNameToNumber(res[2]),
+                    col: Math.min(col1, col2),
                     row: null
                 },
                 to: {
-                    address: res[4],
-                    col: this.columnNameToNumber(res[4]),
+                    col: Math.max(col1, col2),
                     row: null
                 }
             }
         }
     }
 
-    parseRowRange(rowRange) {
-        const res = rowRange.match(/([$]?)([1-9][0-9]*):([$]?)([1-9][0-9]*)/);
+    parseRowRange(row1, row2) {
+        // const res = rowRange.match(/([$]?)([1-9][0-9]*):([$]?)([1-9][0-9]*)/);
         return {
             ref: {
-                address: res[0],
                 from: {
-                    address: res[2],
                     col: null,
-                    row: +res[2],
+                    row: Math.min(row1, row2),
                 },
                 to: {
-                    address: res[4],
                     col: null,
-                    row: +res[4]
+                    row: Math.max(row1, row2),
                 }
             }
 
@@ -86,12 +104,16 @@ class Utils {
     applyPrefix(prefixes, value) {
         // console.log('applyPrefix', prefixes, value);
         const {val, isArray} = this.extractRefValue(value);
+        if (this.isFormulaError(val))
+            return val;
         return Prefix.unaryOp(prefixes, val, isArray);
     }
 
     applyPostfix(value, postfix) {
         // console.log('applyPostfix', value, postfix);
         const {val, isArray} = this.extractRefValue(value);
+        if (this.isFormulaError(val))
+            return val;
         return Postfix.percentOp(val, postfix, isArray);
     }
 
@@ -100,6 +122,10 @@ class Utils {
         const val1 = res1.val, isArray1 = res1.isArray;
         const res2 = this.extractRefValue(value2);
         const val2 = res2.val, isArray2 = res2.isArray;
+        if (this.isFormulaError(val1))
+            return val1;
+        if (this.isFormulaError(val2))
+            return val2;
         if (Operators.compareOp.includes(infix))
             return Infix.compareOp(val1, infix, val2, isArray1, isArray2);
         else if (Operators.concatOp.includes(infix))
@@ -112,18 +138,26 @@ class Utils {
     }
 
     applyIntersect(refs) {
-        console.log('applyIntersect', refs);
+        // console.log('applyIntersect', refs);
+        if (this.isFormulaError(refs[0]))
+            return refs[0];
+        if (!refs[0].ref)
+            throw Error(`Expecting a reference, but got ${refs[0]}.`);
         // a intersection will keep track of references, value won't be retrieved here.
         let maxRow, maxCol, minRow, minCol, sheet, res; // index start from 1
         // first time setup
         const ref = refs.shift().ref;
         sheet = ref.sheet;
         if (!ref.from) {
+            // check whole row/col reference
+            if (ref.row === undefined || ref.col === undefined) {
+                throw Error('Cannot intersect the whole row or column.')
+            }
+
             // cell ref
             maxRow = minRow = ref.row;
             maxCol = minCol = ref.col;
-        }
-        else {
+        } else {
             // range ref
             // update
             maxRow = Math.max(ref.from.row, ref.to.row);
@@ -132,18 +166,24 @@ class Utils {
             minCol = Math.min(ref.from.col, ref.to.col);
         }
 
+        let err;
         refs.forEach(ref => {
+            if (this.isFormulaError(ref))
+                return ref;
             ref = ref.ref;
+            if (!ref) throw Error(`Expecting a reference, but got ${ref}.`);
             if (!ref.from) {
+                if (ref.row === undefined || ref.col === undefined) {
+                    throw Error('Cannot intersect the whole row or column.')
+                }
                 // cell ref
                 if (ref.row > maxRow || ref.row < minRow || ref.col > maxCol || ref.col < minCol
                     || sheet !== ref.sheet) {
-                    throw FormulaError.NULL;
+                    err = FormulaError.NULL;
                 }
                 maxRow = minRow = ref.row;
                 maxCol = minCol = ref.col;
-            }
-            else {
+            } else {
                 // range ref
                 const refMaxRow = Math.max(ref.from.row, ref.to.row);
                 const refMinRow = Math.min(ref.from.row, ref.to.row);
@@ -151,7 +191,7 @@ class Utils {
                 const refMinCol = Math.min(ref.from.col, ref.to.col);
                 if (refMinRow > maxRow || refMaxRow < minRow || refMinCol > maxCol || refMaxCol < minCol
                     || sheet !== ref.sheet) {
-                    throw FormulaError.NULL;
+                    err = FormulaError.NULL;
                 }
                 // update
                 maxRow = Math.min(maxRow, refMaxRow);
@@ -160,6 +200,7 @@ class Utils {
                 minCol = Math.max(minCol, refMinCol);
             }
         });
+        if (err) return err;
         // check if the ref can be reduced to cell reference
         if (maxRow === minRow && maxCol === minCol) {
             res = {
@@ -169,8 +210,7 @@ class Utils {
                     col: maxCol
                 }
             }
-        }
-        else {
+        } else {
             res = {
                 ref: {
                     sheet,
@@ -189,6 +229,8 @@ class Utils {
         const unions = [];
         // a union won't keep references
         refs.forEach(ref => {
+            if (this.isFormulaError(ref))
+                return ref;
             unions.push(this.extractRefValue(ref).val);
         });
 
@@ -197,14 +239,30 @@ class Utils {
     }
 
     /**
-     * Apply multiple references, e.g. A1:B3:C8:.....
+     * Apply multiple references, e.g. A1:B3:C8:A:1:.....
      * @param refs
-     * @return {{ref: {from: {col: number, row: number}, to: {col: number, row: number}}}}
+     // * @return {{ref: {from: {col: number, row: number}, to: {col: number, row: number}}}}
      */
     applyRange(refs) {
-        let res, maxRow = -1, maxCol = -1, minRow = 1048577, minCol = 1048577;
+        let res, maxRow = -1, maxCol = -1, minRow = MAX_ROW + 1, minCol = MAX_COLUMN + 1;
         refs.forEach(ref => {
+            if (this.isFormulaError(ref))
+                return ref;
+            // row ref is saved as number, parse the number to row ref here
+            if (typeof ref === 'number') {
+                ref = this.parseRow(ref);
+            }
             ref = ref.ref;
+            // check whole row/col reference
+            if (ref.row === undefined) {
+                minRow = 1;
+                maxRow = MAX_ROW
+            }
+            if (ref.col === undefined) {
+                minCol = 1;
+                maxCol = MAX_COLUMN;
+            }
+
             if (ref.row > maxRow)
                 maxRow = ref.row;
             if (ref.row < minRow)
@@ -271,7 +329,7 @@ class Utils {
      * @return {string}
      */
     toString(string) {
-        return string.substring(1, string.length - 1);
+        return string.substring(1, string.length - 1) .replace(/""/g, '"');
     }
 
     /**
@@ -283,12 +341,16 @@ class Utils {
     }
 
     /**
-     * Throw an error.
+     * Parse an error.
      * @param {string} error
      * @return {string}
      */
     toError(error) {
-        throw new FormulaError(error.toUpperCase());
+        return new FormulaError(error.toUpperCase());
+    }
+
+    isFormulaError(obj) {
+        return obj instanceof FormulaError;
     }
 }
 

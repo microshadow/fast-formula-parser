@@ -2,7 +2,7 @@ const lexer = require('./lexing');
 const chevrotain = require("chevrotain");
 const tokenVocabulary = lexer.tokenVocabulary;
 
-const Utils = require('./utils/utils');
+const Utils = require('./utils');
 
 const {
     // IntersectOp,
@@ -16,13 +16,14 @@ const {
     FormulaError,
     RefError,
     Cell,
-    RangeColumn,
-    RangeRow,
+    // RangeColumn,
+    // RangeRow,
     Sheet,
     ReservedName,
     Name,
     Number,
     Boolean,
+    Column,
     // Array,
 
     At,
@@ -265,7 +266,7 @@ class Parser extends chevrotain.Parser {
             {
                 ALT: () => {
                     const prefix = $.OPTION(() => $.SUBRULE($.plusMinusOp));
-                    const number =  this.utils.toNumber($.CONSUME(Number).image);
+                    const number = this.utils.toNumber($.CONSUME(Number).image);
                     if (prefix)
                         return this.utils.applyPrefix([prefix], number);
                     return number;
@@ -339,7 +340,11 @@ class Parser extends chevrotain.Parser {
                 args.push($.SUBRULE($.formulaWithCompareOp));
                 $.MANY(() => {
                     $.CONSUME1(Comma);
-                    $.OPTION3(() => args.push($.SUBRULE2($.formulaWithCompareOp)));
+                    args.push(null); // e.g. ROUND(1.5,)
+                    $.OPTION3(() => {
+                        args.pop();
+                        args.push($.SUBRULE2($.formulaWithCompareOp))
+                    });
                 });
             });
             return args;
@@ -360,6 +365,8 @@ class Parser extends chevrotain.Parser {
                     const sheetName = $.SUBRULE($.prefixName);
                     // console.log('sheetName', sheetName);
                     const referenceItem = $.SUBRULE2($.formulaWithRange);
+                    if (this.utils.isFormulaError(referenceItem))
+                        return referenceItem;
                     referenceItem.ref.sheet = sheetName;
                     return (referenceItem);
                 }
@@ -389,8 +396,10 @@ class Parser extends chevrotain.Parser {
         $.RULE('referenceItem', () => $.OR([
             {ALT: () => this.utils.parseCellAddress($.CONSUME(Cell).image)},
             {ALT: () => getVariable($.CONSUME(Name).image)},
-            {ALT: () => this.utils.parseColRange($.CONSUME(RangeColumn).image)},
-            {ALT: () => this.utils.parseRowRange($.CONSUME(RangeRow).image)},
+            {ALT: () => this.utils.parseCol($.CONSUME(Column).image)},
+            // A row check should be here, but the token is same with Number,
+            // In other to resolve ambiguities, I leave this empty, and
+            // parse the number to row number when needed.
             {ALT: () => this.utils.toError($.CONSUME(RefError).image)},
             // {ALT: () => $.SUBRULE($.udfFunctionCall)},
             // {ALT: () => $.SUBRULE($.structuredReference)},
@@ -398,7 +407,7 @@ class Parser extends chevrotain.Parser {
 
         $.RULE('prefixName', () => $.OR([
             {ALT: () => $.CONSUME(Sheet).image.slice(0, -1)},
-            {ALT: () => $.CONSUME(SheetQuoted).image.slice(1, -2)},
+            {ALT: () => $.CONSUME(SheetQuoted).image.slice(1, -2).replace(/''/g, "'")},
         ]));
 
         this.performSelfAnalysis();
