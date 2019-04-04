@@ -14,8 +14,11 @@ describe('Text Functions', function () {
     });
 
     it('CHAR should ..', function () {
-        const result = TextFunctions.CHAR("67");
-        expect(result).to.equal("C")
+        let result = TextFunctions.CHAR(67);
+        expect(result).to.equal("C");
+
+        result = TextFunctions.CHAR(0);
+        expect(result).to.equal("#VALUE!")
     });
 
     it('CLEAN should ..', function () {
@@ -116,6 +119,56 @@ describe('Text Functions', function () {
     it('REPLACE should ..', function () {
         const result = TextFunctions.REPLACE("abcdefghijk", 6, 5, "*");
         expect(result).to.equal("abcde*k")
+    });
+
+    it('REPLACEB should ..', function () {
+        const result = TextFunctions.REPLACEB("abcdefghijk", 6, 0, "*");
+        expect(result).to.equal("abcde*fghijk")
+    });
+
+    it('REPT should ..', function () {
+        const result = TextFunctions.REPT("*_", 4);
+        expect(result).to.equal("*_*_*_*_")
+    });
+
+    it('T should ..', function () {
+        let result = TextFunctions.T("*_");
+        expect(result).to.equal("*_");
+
+        result = TextFunctions.T(19);
+        expect(result).to.equal("");
+    });
+
+    it('TRIM should ..', function () {
+        let result = TextFunctions.TRIM("     First Quarter Earnings    ");
+        expect(result).to.equal("First Quarter Earnings");
+    });
+
+    it('UNICHAR should ..', function () {
+        let result = TextFunctions.UNICHAR(32);
+        expect(result).to.equal(" ");
+
+        result = TextFunctions.UNICHAR(66);
+        expect(result).to.equal("B");
+
+        result = TextFunctions.UNICHAR(0);
+        expect(result).to.equal("#VALUE!");
+    });
+
+    it('UNICODE should ..', function () {
+        let result = TextFunctions.UNICODE(" ");
+        expect(result).to.equal(32);
+
+        result = TextFunctions.UNICODE("B");
+        expect(result).to.equal(66);
+    });
+
+    it('UPPER should ..', function () {
+        let result = TextFunctions.UPPER("total");
+        expect(result).to.equal("TOTAL");
+
+        result = TextFunctions.UPPER("YieLD");
+        expect(result).to.equal("YIELD");
     });
 
 });

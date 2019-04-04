@@ -25,6 +25,9 @@ const TextFunctions = {
 
     CHAR: (number) => {
         number = H.accept(number, [Types.NUMBER]);
+        if (number === 0){
+            return "#VALUE!"
+        }
 
         return String.fromCharCode(number);
     },
@@ -103,8 +106,6 @@ const TextFunctions = {
     },
 
     FINDB: (find_text, within_text) => {
-        find_text = H.accept(find_text, [Types.STRING]);
-        within_text = H.accept(within_text, [Types.STRING]);
         return TextFunctions.FIND(find_text, within_text);
     },
 
@@ -141,7 +142,6 @@ const TextFunctions = {
     },
 
     LEFTB: (text, num_bytes) => {
-        text = H.accept(text, [Types.STRING]);
         TextFunctions.LEFTB(text, num_bytes)
     },
 
@@ -151,7 +151,6 @@ const TextFunctions = {
     },
 
     LENB: (text) => {
-        text = H.accept(text, [Types.STRING]);
         return TextFunctions.LENB(text);
     },
 
@@ -173,9 +172,6 @@ const TextFunctions = {
     },
 
     MIDB: (text,start_num,num_chars) => {
-        text = H.accept(text, [Types.STRING]);
-        start_num = H.accept(start_num, [Types.NUMBER]);
-        num_chars = H.accept(num_chars, [Types.NUMBER]);
         return TextFunctions.MIDtext,start_num,num_chars();
     },
 
@@ -212,19 +208,18 @@ const TextFunctions = {
     },
 
     REPLACEB: (old_text, start_num, num_bytes, new_text) => {
-        old_text = H.accept(old_text, [Types.STRING]);
-        start_num = H.accept(start_num, [Types.NUMBER]);
-        num_bytes = H.accept(num_bytes, [Types.NUMBER]);
-        new_text = H.accept(new_text, [Types.STRING]);
-
-        let arr = old_text.split("");
-        arr.splice(start_num - 1, num_bytes, new_text);
-
-        return arr.join("");
+        return TextFunctions.REPLACE(old_text, start_num, num_bytes, new_text);
     },
 
     REPT: (text, number_times) => {
+        text = H.accept(text, [Types.STRING]);
+        number_times = H.accept(number_times, [Types.NUMBER]);
+        let str = "";
 
+        for (let i = 0; i < number_times; i++){
+            str += text;
+        }
+        return str;
     },
 
     RIGHT: (text, num_chars) => {
@@ -242,17 +237,7 @@ const TextFunctions = {
     },
 
     RIGHTB: (text, num_bytes) => {
-        text = H.accept(text, [Types.STRING]);
-        let str = "";
-
-        if (!num_bytes) {
-            return text[text.length - 1];
-        }
-
-        for (let i = 0; i < num_bytes; i++){
-            str = text[text.length - i - 1] + str;
-        }
-        return str;
+        return TextFunctions.RIGHT(text, num_bytes);
     },
 
     SEARCH: (...params) => {
@@ -263,12 +248,12 @@ const TextFunctions = {
 
     },
 
-    SUBSTITUTE: (...params) => {
+    SUBSTITUTE: (text, old_text, new_text) => {
 
     },
 
-    T: (...params) => {
-
+    T: (value) => {
+        return typeof value === "string" ? value : "";
     },
 
     TEXT: (...params) => {
@@ -279,20 +264,24 @@ const TextFunctions = {
 
     },
 
-    TRIM: (...params) => {
-
+    TRIM: (text) => {
+        text = H.accept(text, [Types.STRING]);
+        return text.replace(/^\s+|\s+$/g, '')
     },
 
-    UNICHAR: (...params) => {
-
+    UNICHAR: (number) => {
+        number = H.accept(number, [Types.NUMBER]);
+        return TextFunctions.CHAR(number);
     },
 
-    UNICODE: (...params) => {
-
+    UNICODE: (text) => {
+        text = H.accept(text, [Types.STRING]);
+        return TextFunctions.CODE(text);
     },
 
-    UPPER: (...params) => {
-
+    UPPER: (text) => {
+        text = H.accept(text, [Types.STRING]);
+        return text.toUpperCase();
     },
 
     VALUE: (...params) => {
