@@ -34,13 +34,11 @@ const TextFunctions = {
 
     CLEAN: (text) => {
         text = H.accept(text, [Types.STRING]);
-
         return text.toString().replace(/[\x00-\x1F]/g, '');
     },
 
     CODE: (text) => {
         text = H.accept(text, [Types.STRING]);
-
         return text.charCodeAt(0);
     },
 
@@ -111,7 +109,6 @@ const TextFunctions = {
 
     FIXED: (number, decimals) => {
         number = H.accept(number, [Types.NUMBER]);
-        //decimals = H.accept(decimals, [Types.NUMBER]);
         let n = Math.pow(10, decimals);
 
         if (!decimals) {
@@ -172,7 +169,7 @@ const TextFunctions = {
     },
 
     MIDB: (text,start_num,num_chars) => {
-        return TextFunctions.MIDtext,start_num,num_chars();
+        return TextFunctions.MID(text,start_num,num_chars);
     },
 
     NUMBERVALUE: (text, decimal_separator, group_separator) => {
@@ -204,7 +201,6 @@ const TextFunctions = {
         arr.splice(start_num - 1, num_chars, new_text);
 
         return arr.join("");
-
     },
 
     REPLACEB: (old_text, start_num, num_bytes, new_text) => {
