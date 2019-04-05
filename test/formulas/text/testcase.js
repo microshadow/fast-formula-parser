@@ -13,11 +13,11 @@ module.exports = {
     CODE: {
         'CODE("C")': 67
     },
-    CONCAT: {
-        'CONCAT(0, {1,2,3;5,6,7})': '0123567',
-        'CONCAT(TRUE, 0, {1,2,3;5,6,7})': 'TRUE0123567',
-        'CONCAT(0, {1,2,3;5,6,7},)': '0123567',
-    },
+    // CONCAT: {
+    //     'CONCAT(0, {1,2,3;5,6,7})': '0123567',
+    //     'CONCAT(TRUE, 0, {1,2,3;5,6,7})': 'TRUE0123567',
+    //     'CONCAT(0, {1,2,3;5,6,7},)': '0123567',
+    // },
     CONCATENATE: {
         'CONCATENATE({9,8,7})': '9',
         'CONCATENATE({9,8,7},{8,7,6})': '98',
@@ -77,7 +77,16 @@ module.exports = {
     UNICHAR:{
         'UNICHAR(32)' : " ",
         'UNICHAR(66)' : "B",
-        'UNICHAR(32)' : "#",
+        'UNICHAR(0)' : "#VALUE!",
     },
+    UNICODE:{
+        'UNICODE(" ")' : 32,
+        'UNICODE("B")' : 66
+    },
+
+    UPPER:{
+        'UPPER("total")' : "TOTAL",
+        'UPPER("YieLD")' : "YIELD"
+    }
 
 };

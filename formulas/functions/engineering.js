@@ -8,7 +8,7 @@ const EngineeringFunctions = {
         x = H.accept(x, [Types.NUMBER]);
         n = H.accept(n, [Types.NUMBER]);
         if (n < 0){
-            return "#NUM!";
+            return FormulaError.NUM;
         }
 
         return Number(bessel.besseli(x,n).toFixed(9));
