@@ -1,24 +1,52 @@
 const FormulaError = require('../error');
 const {FormulaHelpers, Types} = require('../helpers');
 const H = FormulaHelpers;
+
+// Spreadsheet number format
 const ssf = require('../../ssf/ssf');
+
+// Change number to Thai pronunciation string
+const bahttext = require('bahttext');
+
+// full-width and half-width converter
+const charsets = {
+    latin: {halfRE: /[!-~]/g, fullRE: /[！-～]/g, delta: 0xFEE0},
+    hangul1: {halfRE: /[ﾡ-ﾾ]/g, fullRE: /[ᆨ-ᇂ]/g, delta: -0xEDF9},
+    hangul2: {halfRE: /[ￂ-ￜ]/g, fullRE: /[ᅡ-ᅵ]/g, delta: -0xEE61},
+    kana: {delta: 0,
+        half: "｡｢｣､･ｦｧｨｩｪｫｬｭｮｯｰｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝﾞﾟ",
+        full: "。「」、・ヲァィゥェォャュョッーアイウエオカキクケコサシ" +
+            "スセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワン゛゜"},
+    extras: {delta: 0,
+        half: "¢£¬¯¦¥₩\u0020|←↑→↓■°",
+        full: "￠￡￢￣￤￥￦\u3000￨￩￪￫￬￭￮"}
+};
+const toFull = set => c => set.delta ?
+    String.fromCharCode(c.charCodeAt(0) + set.delta) :
+    [...set.full][[...set.half].indexOf(c)];
+const toHalf = set => c => set.delta ?
+    String.fromCharCode(c.charCodeAt(0) - set.delta) :
+    [...set.half][[...set.full].indexOf(c)];
+const re = (set, way) => set[way + "RE"] || new RegExp("[" + set[way] + "]", "g");
+const sets = Object.keys(charsets).map(i => charsets[i]);
+const toFullWidth = str0 =>
+    sets.reduce((str,set) => str.replace(re(set, "half"), toFull(set)), str0);
+const toHalfWidth = str0 =>
+    sets.reduce((str,set) => str.replace(re(set, "full"), toHalf(set)), str0);
 
 const TextFunctions = {
     ASC: (text) => {
-        text = H.accept(text, [Types.STRING]);
-        let result = text.replace(
-            /[\uff01-\uff5e]/g,
-            function (ch) {
-                return String.fromCharCode(ch.charCodeAt(0) - 0xfee0);
-            }
-        );
-        return result;
+        text = H.accept(text, Types.STRING);
+        return toHalfWidth(text);
     },
 
-    BAHTTEXT: (...params) => {
-        // Converts a number to Thai text and adds a suffix of "Baht."
-        // we do not need this function for our project
-        throw FormulaError.NOT_IMPLEMENTED("BAHTTEXT")
+    BAHTTEXT: (number) => {
+        number = H.accept(number, Types.NUMBER);
+        try {
+            return bahttext(number);
+        } catch (e) {
+            throw Error(`Error in https://github.com/jojoee/bahttext \n${e.toString()}`)
+        }
     },
 
     CHAR: (number) => {
@@ -29,12 +57,12 @@ const TextFunctions = {
     },
 
     CLEAN: (text) => {
-        text = H.accept(text, [Types.STRING]);
-        return text.toString().replace(/[\x00-\x1F]/g, '');
+        text = H.accept(text, Types.STRING);
+        return text.replace(/[\x00-\x1F]/g, '');
     },
 
     CODE: (text) => {
-        text = H.accept(text, [Types.STRING]);
+        text = H.accept(text, Types.STRING);
         return text.charCodeAt(0);
     },
 
@@ -54,26 +82,20 @@ const TextFunctions = {
         return text;
     },
 
-    DBCS: (...params) => {
-
+    DBCS: (text) => {
+        text = H.accept(text, Types.STRING);
+        return toFullWidth(text);
     },
 
-    DOLLAR: (number) => {
-        number = H.accept(number, [Types.NUMBER]);
-        let str = "";
-
-        while (number > 1000) {
-            str = number % 1000 + "," + str;
-            number = Math.floor(number / 1000);
-            console.log(number, str);
-
-            if (number < 1000) {
-                str = "$" + number + "," + str;
-            }
-        }
-        str = str.slice(0, -1);
-
-        return str;
+    DOLLAR: (number, decimals) => {
+        number = H.accept(number, Types.NUMBER);
+        decimals = H.accept(decimals, Types.NUMBER, true);
+        if (decimals === undefined)
+            decimals = 2;
+        const decimalString = Array(decimals).fill('0').join('');
+        // Note: does not support locales
+        // TODO: change currency based on user locale or settings from this library
+        return ssf.format(`$#,##0.${decimalString}_);($#,##0.${decimalString})`, number).trim();
     },
 
     EXACT: (text1, text2) => {
@@ -102,21 +124,15 @@ const TextFunctions = {
     },
 
     FIXED: (number, decimals, noCommas) => {
-        number = H.accept(number, [Types.NUMBER]);
+        number = H.accept(number, Types.NUMBER);
         decimals = H.accept(decimals, Types.NUMBER, true);
-        noCommas = H.accept(noCommas, [Types.BOOLEAN],true);
-        let n = Math.pow(10, decimals);
+        noCommas = H.accept(noCommas, Types.BOOLEAN,true);
 
-        if (!decimals) {
-            n = Math.pow(10, 2);
-        }
-
-        if (number < 0) {
-            number = Math.abs(number);
-            return Math.round(number * n) / n * (-1);
-        } else {
-            return Math.round(number * n) / n;
-        }
+        if (decimals === undefined)
+            decimals = 2;
+        const decimalString = Array(decimals).fill('0').join('');
+        const comma = noCommas ? '' : '#,';
+        return ssf.format(`${comma}##0.${decimalString}_);(${comma}##0.${decimalString})`, number).trim();
     },
 
     LEFT: (text, numChars) => {
@@ -214,11 +230,9 @@ const TextFunctions = {
 
     RIGHT: (text, numChars) => {
         text = H.accept(text, Types.STRING);
-        if (numChars.omitted) {
+        numChars = H.accept(numChars, Types.NUMBER, true);
+        if (numChars === undefined)
             numChars = 1;
-        } else {
-            numChars = H.accept(numChars, Types.NUMBER);
-        }
         if (numChars < 0)
             throw FormulaError.VALUE;
         const len = text.length;
@@ -289,7 +303,7 @@ const TextFunctions = {
         try {
             return ssf.format(formatText, value);
         } catch (e) {
-            console.error(e);
+            console.error(e)
             throw FormulaError.VALUE;
         }
     },
@@ -316,11 +330,6 @@ const TextFunctions = {
         text = H.accept(text, [Types.STRING]);
         return TextFunctions.CODE(text);
     },
-
-    UPPER: (text) => {
-        text = H.accept(text, [Types.STRING]);
-        return text.toUpperCase();
-    }
 };
 
 module.exports = TextFunctions;
