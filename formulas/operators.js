@@ -1,5 +1,5 @@
 const FormulaError = require('../formulas/error');
-const {FormulaHelpers, Types} = require('../formulas/helpers');
+const {FormulaHelpers} = require('../formulas/helpers');
 
 const Prefix = {
     unaryOp: (prefixes, value, isArray) => {
@@ -137,6 +137,8 @@ const Infix = {
             case '*':
                 return value1 * value2;
             case '/':
+                if (value2 === 0)
+                    return FormulaError.DIV0;
                 return value1 / value2;
             case '^':
                 return value1 ** value2;

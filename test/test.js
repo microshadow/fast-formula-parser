@@ -8,8 +8,6 @@ const lineReader = require('readline').createInterface({
     input: fs.createReadStream('./test/formulas.txt')
 });
 
-require('./formulas/math/math');
-require('./formulas/text/text');
 
 describe('Parsing Formulas 1', function () {
     let success = 0;
@@ -37,7 +35,7 @@ describe('Parsing Formulas 1', function () {
         formulas.forEach((formula, index) => {
             // console.log('testing #', index, formula);
             try {
-                parser.parse(formula);
+                parser.parse(formula, {row: 2, col: 2});
                 success++;
             } catch (e) {
                 failures.push(formula);
@@ -47,6 +45,10 @@ describe('Parsing Formulas 1', function () {
             console.log(failures);
             console.log(`Success rate: ${success / formulas.length * 100}%`);
         }
+
+        const logs = parser.logs.sort();
+        console.log(`The following functions is not implemented: (${logs.length} in total)\n ${logs.join(', ')}`);
+        parser.logs = [];
         assert.strictEqual(success / formulas.length === 1, true);
     });
 });
@@ -81,6 +83,16 @@ describe('Parsing Formulas 2', () => {
             console.log(`Success rate: ${success / formulas.length * 100}%`);
         }
         assert.strictEqual(success / formulas.length === 1, true);
+        const logs = parser.logs.sort();
+        console.log(`The following functions is not implemented: (${logs.length} in total)\n ${logs.join(', ')}`);
+        parser.logs = [];
         done();
     });
+
 });
+
+
+require('./formulas/math/math');
+require('./formulas/text/text');
+require('./formulas/reference/reference');
+require('./formulas/information/information');

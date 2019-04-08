@@ -1,4 +1,5 @@
 const FormulaError = require('../error');
+const ReferenceFunctions = require('./reference');
 const {FormulaHelpers, Types, Factorials} = require('../helpers');
 const H = FormulaHelpers;
 
@@ -102,13 +103,11 @@ const MathFunctions = {
         number = H.accept(number, Types.NUMBER);
         if (number >= 9.99E+307 || number <= -2.229E+308)
             throw FormulaError.NUM;
-        significance = H.accept(significance, Types.NUMBER, true);
-        if (significance === undefined)
-            significance = number > 0 ? 1 : -1;
+        significance = H.accept(significance, Types.NUMBER, number > 0 ? 1 : -1);
         // mode can be any number
-        mode = H.accept(mode, Types.NUMBER, true);
+        mode = H.accept(mode, Types.NUMBER, 0);
         // The Mode argument does not affect positive numbers.
-        if (mode === undefined || number >= 0) {
+        if (number >= 0) {
             return MathFunctions.CEILING(number, significance);
         }
         // if round down, away from zero, then significance
@@ -118,8 +117,7 @@ const MathFunctions = {
 
     'CEILING.PRECISE': (number, significance) => {
         number = H.accept(number, Types.NUMBER);
-        significance = H.accept(significance, Types.NUMBER, true);
-        if (significance === undefined) significance = 1;
+        significance = H.accept(significance, Types.NUMBER, 1);
         // always round up
         return MathFunctions.CEILING(number, Math.abs(significance));
     },
@@ -216,14 +214,13 @@ const MathFunctions = {
         number = H.accept(number, Types.NUMBER);
         if (number >= 9.99E+307 || number <= -2.229E+308)
             throw FormulaError.NUM;
-        significance = H.accept(significance, Types.NUMBER, true);
-        if (significance === undefined)
-            significance = number > 0 ? 1 : -1;
+        significance = H.accept(significance, Types.NUMBER, number > 0 ? 1 : -1);
+
         // mode can be 0 or any other number, 0 means away from zero
         // the official documentation seems wrong
-        mode = H.accept(mode, Types.NUMBER, true);
+        mode = H.accept(mode, Types.NUMBER, 0);
         // The Mode argument does not affect positive numbers.
-        if (mode === undefined || number >= 0) {
+        if (mode === 0 || number >= 0) {
             // away from zero
             return MathFunctions.FLOOR(number, Math.abs(significance));
         }
@@ -234,8 +231,7 @@ const MathFunctions = {
 
     'FLOOR.PRECISE': (number, significance) => {
         number = H.accept(number, Types.NUMBER);
-        significance = H.accept(significance, Types.NUMBER, true);
-        if (significance === undefined) significance = 1;
+        significance = H.accept(significance, Types.NUMBER, 1);
         // always round up
         return MathFunctions.FLOOR(number, Math.abs(significance));
     },
@@ -296,9 +292,8 @@ const MathFunctions = {
 
     LOG: (number, base) => {
         number = H.accept(number, Types.NUMBER);
-        base = H.accept(base, Types.NUMBER, true);
-        if (base === undefined)
-            base = 10;
+        base = H.accept(base, Types.NUMBER, 10);
+
         return Math.log(number) / Math.log(base);
     },
 
@@ -307,22 +302,76 @@ const MathFunctions = {
         return Math.log10(number);
     },
 
-    MDETERM: () => {
+    MDETERM: (array) => {
+        array = H.accept(array, Types.ARRAY, null, false);
+        if (array[0].length !== array.length)
+            throw FormulaError.VALUE;
+        // adopted from https://github.com/numbers/numbers.js/blob/master/lib/numbers/matrix.js#L261
+        const numRow = array.length, numCol = array[0].length;
+        let det = 0, diagLeft, diagRight;
 
+        if (numRow === 1) {
+            return array[0][0];
+        } else if (numRow === 2) {
+            return array[0][0] * array[1][1] - array[0][1] * array[1][0];
+        }
+
+        for (let col = 0; col < numCol; col++) {
+            diagLeft = array[0][col];
+            diagRight = array[0][col];
+
+            for (let row = 1; row < numRow; row++) {
+                diagRight *= array[row][(((col + row) % numCol) + numCol) % numCol];
+                diagLeft *= array[row][(((col - row) % numCol) + numCol) % numCol];
+            }
+
+            det += diagRight - diagLeft;
+        }
+
+        return det;
     },
 
-    MINVERSE: () => {
-
+    MINVERSE: (array) => {
+        // TODO
+        // array = H.accept(array, Types.ARRAY, null, false);
+        // if (array[0].length !== array.length)
+        //     throw FormulaError.VALUE;
+        // throw FormulaError.NOT_IMPLEMENTED('MINVERSE');
     },
 
-    MMULT: () => {
+    MMULT: (array1, array2) => {
+        array1 = H.accept(array1, Types.ARRAY, null, false);
+        array2 = H.accept(array2, Types.ARRAY, null, false);
+        if (array1[0].length !== array1.length)
+            throw FormulaError.VALUE;
+        // https://github.com/numbers/numbers.js/blob/master/lib/numbers/matrix.js#L233
+        const result = [];
 
+        for (let x = 0; x < array1.length; x++) {
+            result[x] = [];
+        }
+
+        const array2_T = ReferenceFunctions.TRANSPOSE(array2);
+
+        for (let i = 0; i < array1.length; i++) {
+            for (let j = 0; j < array2[i].length; j++) {
+                array1[i].forEach(val => {
+                    if (typeof val !== "number") throw FormulaError.VALUE
+                });
+                array2_T[j].forEach(val => {
+                    if (typeof val !== "number") throw FormulaError.VALUE
+                });
+                result[i][j] = MathFunctions.SUMPRODUCT([array1[i]], [array2_T[j]]);
+            }
+        }
+        return result;
     },
 
     MOD: () => {
 
     },
 
+    // TODO: Start from here.
     MROUND: () => {
 
     },
@@ -426,6 +475,32 @@ const MathFunctions = {
     },
 
 
+    SUMPRODUCT: (array1, ...arrays) => {
+        array1 = H.accept(array1, Types.ARRAY, null, false);
+        arrays.forEach(array => {
+            array = H.accept(array, Types.ARRAY, null, false);
+            if (array1[0].length !== array[0].length || array1.length !== array.length)
+                throw FormulaError.VALUE;
+            for (let i = 0; i < array1.length; i++) {
+                for (let j = 0; j < array1[0].length; j++) {
+                    if (typeof array1[i][j] !== "number")
+                        array1[i][j] = 0;
+                    if (typeof array[i][j] !== "number")
+                        array[i][j] = 0;
+                    array1[i][j] *= array[i][j];
+                }
+            }
+        });
+        let result = 0;
+
+        array1.forEach(row => {
+            row.forEach(value => {
+                result += value;
+            })
+        });
+
+        return result;
+    },
 };
 
 
