@@ -6,9 +6,12 @@ const jStat = require("jStat");
 
 const EngineeringFunctions = {
     BESSELI: (x,n) => {
-        x = H.accept(x, [Types.NUMBER]);
-        n = H.accept(n, [Types.NUMBER]);
+        x = H.accept(x, Types.NUMBER);
+        n = H.accept(n, Types.NUMBER);
+        // if n is not an integer, it is truncated.
+        n = Math.floor(n);
         if (n < 0){
+            console.log("error: n is less than 0");
             throw FormulaError.NUM;
         }
 
@@ -16,8 +19,10 @@ const EngineeringFunctions = {
     },
 
     BESSELJ: (x,n) => {
-        x = H.accept(x, [Types.NUMBER]);
-        n = H.accept(n, [Types.NUMBER]);
+        x = H.accept(x, Types.NUMBER);
+        n = H.accept(n, Types.NUMBER);
+        // if n is not an integer, it is truncated.
+        n = Math.floor(n);
         if (n < 0){
             throw FormulaError.NUM;
         }
@@ -26,8 +31,10 @@ const EngineeringFunctions = {
     },
 
     BESSELK: (x,n) => {
-        x = H.accept(x, [Types.NUMBER]);
-        n = H.accept(n, [Types.NUMBER]);
+        x = H.accept(x, Types.NUMBER);
+        n = H.accept(n, Types.NUMBER);
+        // if n is not an integer, it is truncated.
+        n = Math.floor(n);
         if (n < 0){
             throw FormulaError.NUM;
         }
@@ -36,8 +43,10 @@ const EngineeringFunctions = {
     },
 
     BESSELY: (x,n) => {
-        x = H.accept(x, [Types.NUMBER]);
-        n = H.accept(n, [Types.NUMBER]);
+        x = H.accept(x, Types.NUMBER);
+        n = H.accept(n, Types.NUMBER);
+        // if n is not an integer, it is truncated.
+        n = Math.floor(n);
         if (n < 0){
             throw FormulaError.NUM;
         }
@@ -46,7 +55,7 @@ const EngineeringFunctions = {
     },
 
     BIN2DEC: (number) => {
-        number = H.accept(number, [Types.NUMBER]);
+        number = H.accept(number, Types.NUMBER);
         let numberStr = number.toString();
         if (numberStr.length > 10){
             throw FormulaError.NUM;
@@ -60,8 +69,8 @@ const EngineeringFunctions = {
     },
 
     BIN2HEX: (number, places) => {
-        number = H.accept(number, [Types.NUMBER]);
-        places = H.accept(places, [Types.NUMBER], false);
+        number = H.accept(number, Types.NUMBER);
+        places = H.accept(places, Types.NUMBER, false);
         if (places < 0){
             throw FormulaError.NUM;
         }
@@ -85,8 +94,8 @@ const EngineeringFunctions = {
     },
 
     BIN2OCT: (number, places) => {
-        number = H.accept(number, [Types.NUMBER]);
-        places = H.accept(places, [Types.NUMBER], false);
+        number = H.accept(number, Types.NUMBER);
+        places = H.accept(places, Types.NUMBER, false);
         if (places < 0){
             throw FormulaError.NUM;
         }
@@ -110,8 +119,8 @@ const EngineeringFunctions = {
     },
 
     BITAND: (number1, number2) => {
-        number1 = H.accept(number1, [Types.NUMBER]);
-        number2 = H.accept(number2, [Types.NUMBER]);
+        number1 = H.accept(number1, Types.NUMBER);
+        number2 = H.accept(number2, Types.NUMBER);
         if (number1 < 0 || number2 < 0){
             throw FormulaError.NUM;
         }
@@ -127,8 +136,8 @@ const EngineeringFunctions = {
     },
 
     BITLSHIFT: (number, shiftAmount) => {
-        number = H.accept(number, [Types.NUMBER]);
-        shiftAmount = H.accept(shiftAmount, [Types.NUMBER]);
+        number = H.accept(number, Types.NUMBER);
+        shiftAmount = H.accept(shiftAmount, Types.NUMBER);
         if (Math.abs(shiftAmount) > 53){
             throw FormulaError.NUM;
         }
@@ -141,8 +150,8 @@ const EngineeringFunctions = {
     },
 
     BITOR: (number1, number2) => {
-        number1 = H.accept(number1, [Types.NUMBER]);
-        number2 = H.accept(number2, [Types.NUMBER]);
+        number1 = H.accept(number1, Types.NUMBER);
+        number2 = H.accept(number2, Types.NUMBER);
         if (number1 < 0 || number2 < 0){
             throw FormulaError.NUM;
         }
@@ -158,8 +167,8 @@ const EngineeringFunctions = {
     },
 
     BITRSHHIFT: (number, shiftAmount) => {
-        number = H.accept(number, [Types.NUMBER]);
-        shiftAmount = H.accept(shiftAmount, [Types.NUMBER]);
+        number = H.accept(number, Types.NUMBER);
+        shiftAmount = H.accept(shiftAmount, Types.NUMBER);
         if (Math.abs(shiftAmount) > 53){
             throw FormulaError.NUM;
         }
@@ -172,8 +181,8 @@ const EngineeringFunctions = {
     },
 
     BITXOR: (number1, number2) => {
-        number1 = H.accept(number1, [Types.NUMBER]);
-        number2 = H.accept(number2, [Types.NUMBER]);
+        number1 = H.accept(number1, Types.NUMBER);
+        number2 = H.accept(number2, Types.NUMBER);
         if (number1 < 0 || number1 > 281474976710655 || number2 < 0 || number2 > 281474976710655){
             throw FormulaError.NUM;
         }
@@ -186,8 +195,8 @@ const EngineeringFunctions = {
     },
 
     COMPLEX: (realNum, iNum, suffix) => {
-        realNum = H.accept(realNum, [Types.NUMBER]);
-        iNum = H.accept(iNum, [Types.NUMBER]);
+        realNum = H.accept(realNum, Types.NUMBER);
+        iNum = H.accept(iNum, Types.NUMBER);
         suffix = H.accept(realNum, [Types.STRING],false);
         if (suffix !== "i" && suffix !== "j"){
             throw FormulaError.VALUE;
@@ -209,12 +218,14 @@ const EngineeringFunctions = {
     // convert a number from one measurement system to another. For example, it can translate a table of
     // distances in miles to a table of distances in kilometers.
     CONVERT: (number, fromUnit, toUnit) => {
-        number = H.accept(number, [Types.NUMBER]);
+        number = H.accept(number, Types.NUMBER);
+
+        // list of units supported by CONVERT and units defined by the International System of Unites
     },
 
     DEC2BIN: (number, places) => {
-        number = H.accept(number, [Types.NUMBER]);
-        places = H.accept(places, [Types.NUMBER],false);
+        number = H.accept(number, Types.NUMBER);
+        places = H.accept(places, Types.NUMBER,false);
         if (number < -512 || number > 512){
             throw FormulaError.NUM;
         }
@@ -238,8 +249,8 @@ const EngineeringFunctions = {
     },
 
     DEC2HEX: (number, places) => {
-        number = H.accept(number, [Types.NUMBER]);
-        places = H.accept(places, [Types.NUMBER],false);
+        number = H.accept(number, Types.NUMBER);
+        places = H.accept(places, Types.NUMBER,false);
         if (number < -549755813888 || number > 549755813888){
             throw FormulaError.NUM;
         }
@@ -262,8 +273,8 @@ const EngineeringFunctions = {
     },
 
     DEC2OCT: (number, places) => {
-        number = H.accept(number, [Types.NUMBER]);
-        places = H.accept(places, [Types.NUMBER],false);
+        number = H.accept(number, Types.NUMBER);
+        places = H.accept(places, Types.NUMBER,false);
         if (number < -536870912 || number > 536870912){
             throw FormulaError.NUM;
         }
@@ -286,35 +297,35 @@ const EngineeringFunctions = {
     },
 
     DELTA: (number1, number2) => {
-        number1 = H.accept(number1, [Types.NUMBER]);
-        number2 = H.accept(number2, [Types.NUMBER],false);
+        number1 = H.accept(number1, Types.NUMBER);
+        number2 = H.accept(number2, Types.NUMBER,false);
         number2 = (number2 === undefined) ? 0 : number2;
 
         return Math.floor(number1) === Math.floor(number2) ? 1 : 0;
     },
 
     ERF: (lowerLimit, upperLimit) => {
-        lowerLimit = H.accept(lowerLimit, [Types.NUMBER]);
-        upperLimit = H.accept(upperLimit, [Types.NUMBER],false);
+        lowerLimit = H.accept(lowerLimit, Types.NUMBER);
+        upperLimit = H.accept(upperLimit, Types.NUMBER,false);
         upperLimit = (upperLimit === undefined) ? 0 : upperLimit;
         return jStat.erf(lowerLimit);
     },
 
     ERFC: (x) => {
-        x = H.accept(x, [Types.NUMBER]);
+        x = H.accept(x, Types.NUMBER);
         return jStat.erfc(x);
     },
 
     GESTEP: (number, step) => {
-        number = H.accept(number, [Types.NUMBER]);
-        step = H.accept(step, [Types.NUMBER],false);
+        number = H.accept(number, Types.NUMBER);
+        step = H.accept(step, Types.NUMBER,false);
         step = (step === undefined) ? 0 : step;
         return number >= step ? 1 : 0;
     },
 
     HEX2BIN: (number, places) => {
-        number = H.accept(number, [Types.NUMBER]);
-        places = H.accept(places, [Types.NUMBER],false);
+        number = H.accept(number, Types.NUMBER);
+        places = H.accept(places, Types.NUMBER,false);
         // if places is not an integer, it is truncated.
         places = Math.floor(places);
         if (places < 0){
@@ -341,14 +352,14 @@ const EngineeringFunctions = {
     },
 
     HEX2DEC: (number) => {
-        number = H.accept(number, [Types.NUMBER]);
+        number = H.accept(number, Types.NUMBER);
         let result = parseInt(number,16);
         return (result >= 549755813888) ? result - 1099511627776 : result;
     },
 
     HEX2OCT: (number, places) => {
-        number = H.accept(number, [Types.NUMBER]);
-        places = H.accept(places, [Types.NUMBER],false);
+        number = H.accept(number, Types.NUMBER);
+        places = H.accept(places, Types.NUMBER,false);
         // if places is not an integer, it is truncated.
         places = Math.floor(places);
         if (places < 0){
@@ -592,7 +603,7 @@ const EngineeringFunctions = {
 
     IMPOWER: (iNumber, number) => {
         iNumber = H.accept(iNumber, [Types.STRING]);
-        number = H.accept(number, [Types.NUMBER]);
+        number = H.accept(number, Types.NUMBER);
 
         // look up imaginary unit
         let unit = iNumber.substring(iNumber.length - 1, iNumber.length);
@@ -761,7 +772,7 @@ const EngineeringFunctions = {
 
     OCT2BIN: (number, places) => {
         number = H.accept(number, [Types.STRING]);
-        places = H.accept(places, [Types.NUMBER],false);
+        places = H.accept(places, Types.NUMBER,false);
         // if places is not an integer, it is truncated
         places = Math.floor(places);
         if (places < 0){
@@ -800,7 +811,7 @@ const EngineeringFunctions = {
 
     OCT2HEX: (number, places) => {
         number = H.accept(number, [Types.STRING]);
-        places = H.accept(places, [Types.NUMBER],false);
+        places = H.accept(places, Types.NUMBER,false);
         // if places is not an integer, it is truncated
         places = Math.floor(places);
         if (places < 0){
