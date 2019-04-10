@@ -5,11 +5,13 @@ const LogicalFunctions = require('../formulas/functions/logical');
 const EngFunctions = require('../formulas/functions/engineering');
 const ReferenceFunctions = require('../formulas/functions/reference');
 const InformationFunctions = require('../formulas/functions/information');
+const StatisticalFunctions = require('../formulas/functions/statistical');
 const FormulaError = require('../formulas/error');
 const {FormulaHelpers} = require('../formulas/helpers');
 const {Parser, allTokens} = require('./parsing');
 const lexer = require('./lexing');
 const Utils = require('./utils');
+
 
 class FormulaParser {
 
@@ -28,7 +30,7 @@ class FormulaParser {
         }, config);
 
         this.variables = config.variables;
-        this.functions = Object.assign({}, InformationFunctions, ReferenceFunctions,
+        this.functions = Object.assign({}, StatisticalFunctions, InformationFunctions, ReferenceFunctions,
             EngFunctions, LogicalFunctions, TextFunctions, MathFunctions, TrigFunctions, config.functions);
         this.onRange = config.onRange;
         this.onCell = config.onCell;
@@ -38,15 +40,19 @@ class FormulaParser {
             .concat(Object.keys(TrigFunctions))
             .concat(Object.keys(LogicalFunctions))
             .concat(Object.keys(EngFunctions))
-            .concat(Object.keys(ReferenceFunctions));
+            .concat(Object.keys(ReferenceFunctions))
+            .concat(Object.keys(StatisticalFunctions));
 
         // functions need context and don't need to retrieve references
-        this.funsNeedContext = ['ROW', 'ROWS', 'COLUMN', 'COLUMNS'];
+        this.funsNeedContextAndNoDataRetrieve = ['ROW', 'ROWS', 'COLUMN', 'COLUMNS', 'SUMIF'];
+        this.funsNeedContext = [];
         this.funsPreserveRef = Object.keys(InformationFunctions);
 
         // uses ES5 syntax here... I don't want to transpile the code...
         this.getCell = (ref) => {
             // console.log('get cell', JSON.stringify(ref));
+            if (ref.sheet == null)
+                ref.sheet = this.position ? this.position.sheet : undefined;
             return this.onCell(ref);
         };
 
@@ -61,6 +67,9 @@ class FormulaParser {
         // };
 
         this.getRange = (ref) => {
+            // console.log('get range', JSON.stringify(ref));
+            if (ref.sheet == null)
+                ref.sheet = this.position ? this.position.sheet : undefined;
             return this.onRange(ref)
         };
 
@@ -77,7 +86,7 @@ class FormulaParser {
             // if one arg is null, it means 0 or "" depends on the function it calls
             const nullValue = this.funsNullAs0.includes(name) ? 0 : '';
 
-            if (!this.funsNeedContext.includes(name)) {
+            if (!this.funsNeedContextAndNoDataRetrieve.includes(name)) {
                 // retrieve reference
                 args = args.map(arg => {
                     if (arg === null)
@@ -87,7 +96,12 @@ class FormulaParser {
                     if (this.funsPreserveRef.includes(name)) {
                         return {value: res.val, isArray: res.isArray, ref: arg.ref};
                     }
-                    return {value: res.val, isArray: res.isArray};
+                    return {
+                        value: res.val,
+                        isArray: res.isArray,
+                        isRangeRef: !!FormulaHelpers.isRangeRef(arg),
+                        isCellRef: !!FormulaHelpers.isCellRef(arg)
+                    };
                 });
             }
             // console.log('callFunction', name, args)
@@ -95,7 +109,7 @@ class FormulaParser {
             if (this.functions[name]) {
                 let res;
                 try {
-                    if (!this.funsNeedContext.includes(name))
+                    if (!this.funsNeedContextAndNoDataRetrieve.includes(name) || this.funsNeedContext.includes(name))
                         res = (this.functions[name](...args));
                     else
                         res = (this.functions[name](this, ...args));
@@ -174,6 +188,13 @@ class FormulaParser {
             if (result.ref && !result.ref.from) {
                 // single cell reference
                 result = this.retrieveRef(result);
+            } else if (result.ref && result.ref.from.col === result.ref.to.col) {
+                // single Column reference
+                result = this.retrieveRef({
+                    ref: {
+                        row: result.ref.from.row, col: result.ref.from.col
+                    }
+                });
             } else if (Array.isArray(result)) {
                 result = result[0][0]
             } else {
@@ -192,6 +213,7 @@ class FormulaParser {
      * @returns {*}
      */
     parse(inputText, position) {
+        if (inputText.length === 0) throw Error('Input must not be empty.');
         this.position = position;
         const lexResult = lexer.lex(inputText);
         this.parser.input = lexResult.tokens;

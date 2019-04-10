@@ -56,6 +56,14 @@ module.exports = {
         'GCD(128, 80, 44,)': 4,
         'GCD(128, 80, 44, 2 ^ 53)': '#NUM!', // excel parse this as #NUM!
         'GCD("a")': '#VALUE!',
+        'GCD(5, 2, (A1))': 1,
+        'GCD(5, 2, A1:E1)': 1,
+        'GCD(5, 2, (A1:E1))': 1,
+        'GCD(5, 2, (A1, A2))': '#VALUE!', // does not support union
+        'GCD(5, 2, {3, 7})': 1,
+        'GCD(5, 2, {3, "7"})': 1,
+        'GCD(5, 2, {3, "7a"})': '#VALUE!',
+        'GCD(5, 2, {3, "7"}, TRUE)': '#VALUE!',
     },
 
     INT: {
@@ -65,11 +73,20 @@ module.exports = {
     },
 
     LCM: {
+        'LCM("a")': '#VALUE!',
         'LCM(5, 2)': 10,
         'LCM(24, 36)': 72,
         'LCM(50,56,100)': 1400,
         'LCM(50,56,100,)': 1400,
         'LCM(128, 80, 44, 2 ^ 53)': '#NUM!', // excel parse this as #NUM!
+        'LCM(5, 2, (A1))': 10,
+        'LCM(5, 2, A1:E1)': 60,
+        'LCM(5, 2, (A1:E1))': 60,
+        'LCM(5, 2, (A1, A2))': '#VALUE!', // does not support union
+        'LCM(5, 2, {3, 7})': 210,
+        'LCM(5, 2, {3, "7"})': 210,
+        'LCM(5, 2, {3, "7a"})': '#VALUE!',
+        'LCM(5, 2, {3, "7"}, TRUE)': '#VALUE!',
     },
 
     LN: {
@@ -102,7 +119,33 @@ module.exports = {
         'MMULT({1,3;"r",2}, {2,0;0,2})': '#VALUE!',
     },
 
+    SUM: {
+        'SUM(1,2,3)': 6,
+        'SUM(A1:C1, C1:E1)': 18,
+        'SUM((A1:C1, C1:E1))': 18,
+        'SUM((A1:C1, C1:E1), A1)': 19,
+        'SUM("1", {1})': 2,
+        'SUM("1", {"1"})': 1,
+        'SUM("1", {"1"},)': 1,
+        'SUM("1", {"1"},TRUE)': 2,
+    },
 
+    SUMIF: {
+        'SUMIF(A1:E1, ">1")': 14,
+        'SUMIF(A2:A5,">160000",B2:B5)': 63000,
+        'SUMIF(A2:A5,">160000")': 900000,
+        'SUMIF(A2:A5,300000,B2:B5)': 21000,
+        'SUMIF(A2:A5,">" & C2,B2:B5)': 49000,
+        'SUMIF(A7:A12,"Fruits",C7:C12)': 2000,
+        'SUMIF(A7:A12,"Vegetables",C7:C12)': 12000,
+        'SUMIF(B7:B12,"*es",C7:C12)': 4300,
+        'SUMIF(A7:A12,"",C7:C12)': 400,
+        //The sum_range argument does not have to be the same size and shape as the range argument.
+        // The actual cells that are added are determined by using the upper leftmost cell in the
+        // sum_range argument as the beginning cell, and then including cells that correspond in size
+        // and shape to the range argument. For example:
+        'SUMIF(A7:A12,"",C7)': 400,
+    },
 
     SUMPRODUCT: {
         'SUMPRODUCT({1,"12";7,2}, {2,1;5,2})': 41,

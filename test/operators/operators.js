@@ -1,6 +1,6 @@
 const chai = require('chai');
 const expect = require('chai').expect;
-const {FormulaParser} = require('../../../grammar/hooks');
+const {FormulaParser} = require('../../grammar/hooks');
 const TestCase = require('./testcase');
 
 const data = [
@@ -35,7 +35,7 @@ const parser = new FormulaParser({
     }
 });
 
-describe('Math Functions', function () {
+describe('Operators', function () {
     const funs = Object.keys(TestCase);
 
     funs.forEach(fun => {

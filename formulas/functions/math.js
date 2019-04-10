@@ -1,6 +1,7 @@
 const FormulaError = require('../error');
 const ReferenceFunctions = require('./reference');
-const {FormulaHelpers, Types, Factorials} = require('../helpers');
+const {FormulaHelpers, Types, Factorials, Criteria} = require('../helpers');
+const {Infix} = require('../operators');
 const H = FormulaHelpers;
 
 // factorials
@@ -237,11 +238,18 @@ const MathFunctions = {
     },
 
     GCD: (...params) => {
-        const arr = H.flattenParams(params, Types.NUMBER, param => {
-            if (param < 0 || param > 9007199254740990) // 2^53
-                throw FormulaError.NUM;
-            return Math.trunc(param);
-        }, false);
+        const arr = [];
+        H.flattenParams(params, null, false,
+            (param) => {
+                // allow array, range ref
+                param = typeof param === 'boolean' ? NaN : Number(param);
+                if (!isNaN(param)) {
+                    if (param < 0 || param > 9007199254740990) // 2^53
+                        throw FormulaError.NUM;
+                    arr.push(Math.trunc(param))
+                } else
+                    throw FormulaError.VALUE;
+            }, 0);
         // http://rosettacode.org/wiki/Greatest_common_divisor#JavaScript
         let i, y,
             n = params.length,
@@ -268,11 +276,20 @@ const MathFunctions = {
     },
 
     LCM: (...params) => {
-        const arr = H.flattenParams(params, Types.NUMBER, param => {
-            if (param < 0 || param > 9007199254740990) // 2^53
-                throw FormulaError.NUM;
-            return Math.trunc(param);
-        }, false, 1);
+        const arr = [];
+        // always parse string to number if possible
+        H.flattenParams(params, null, false,
+            param => {
+                param = typeof param === 'boolean' ? NaN : Number(param);
+                if (!isNaN(param)) {
+                    if (param < 0 || param > 9007199254740990) // 2^53
+                        throw FormulaError.NUM;
+                    arr.push(Math.trunc(param))
+                }
+                // throw value error if can't parse to string
+                else
+                    throw FormulaError.VALUE;
+            }, 1);
         // http://rosettacode.org/wiki/Least_common_multiple#JavaScript
         let n = arr.length, a = Math.abs(arr[0]);
         for (let i = 1; i < n; i++) {
@@ -303,7 +320,7 @@ const MathFunctions = {
     },
 
     MDETERM: (array) => {
-        array = H.accept(array, Types.ARRAY, null, false);
+        array = H.accept(array, Types.ARRAY, null, false, true);
         if (array[0].length !== array.length)
             throw FormulaError.VALUE;
         // adopted from https://github.com/numbers/numbers.js/blob/master/lib/numbers/matrix.js#L261
@@ -340,8 +357,8 @@ const MathFunctions = {
     },
 
     MMULT: (array1, array2) => {
-        array1 = H.accept(array1, Types.ARRAY, null, false);
-        array2 = H.accept(array2, Types.ARRAY, null, false);
+        array1 = H.accept(array1, Types.ARRAY, null, false, true);
+        array2 = H.accept(array2, Types.ARRAY, null, false, true);
         if (array1[0].length !== array1.length)
             throw FormulaError.VALUE;
         // https://github.com/numbers/numbers.js/blob/master/lib/numbers/matrix.js#L233
@@ -463,22 +480,95 @@ const MathFunctions = {
     },
 
     SUM: (...params) => {
+        // parse string to number only when it is a literal. (not a reference)
         let result = 0;
-        H.flattenParams(params, Types.NUMBER, item => {
-            result += item;
-        }, true);
+        H.flattenParams(params, Types.NUMBER, true,
+            (item, info) => {
+                // literal will be parsed to given type (Type.NUMBER)
+                if (info.isLiteral) {
+                    result += item;
+                } else {
+                    if (typeof item === "number")
+                        result += item;
+                }
+            });
         return result
     },
 
-    SUMIF: (...params) => {
+    /**
+     * This functions requires instance of {@link FormulaParser}.
+     */
+    SUMIF: (context, range, criteria, sumRange) => {
+        // process args
+        if (sumRange == null) {
+            sumRange = range;
+        } else {
+            let rowOffset, colOffset;
+            if (H.isCellRef(range)) {
+                rowOffset = 0;
+                colOffset = 0;
+            } else if (H.isRangeRef(range)) {
+                rowOffset = range.ref.to.row - range.ref.from.row;
+                colOffset = range.ref.to.col - range.ref.from.col;
+            } else throw Error('SUMIF should not reach here.');
+            // if sum range is a cell reference
+            if (H.isCellRef(sumRange)) {
+                if (rowOffset > 0 || colOffset > 0)
+                    sumRange = {
+                        ref: {
+                            from: {col: sumRange.ref.col, row: sumRange.ref.row},
+                            to: {row: sumRange.ref.row + rowOffset, col: sumRange.ref.col + colOffset}
+                        }
+                    };
+            } else {
+                // sum range is a range reference
+                sumRange.ref.to.row = sumRange.ref.from.row + rowOffset;
+                sumRange.ref.to.col = sumRange.ref.from.col + colOffset;
+            }
+        }
 
+        // retrieve values
+        range = context.utils.extractRefValue(range);
+        range = {value: range.val, isArray: range.isArray};
+        range = H.accept(range, Types.ARRAY, null, false, true);
+
+        sumRange = context.utils.extractRefValue(sumRange);
+        sumRange = {value: sumRange.val, isArray: sumRange.isArray};
+        sumRange = H.accept(sumRange, Types.ARRAY, null, false, true);
+
+        criteria = context.utils.extractRefValue(criteria);
+        const isCriteriaArray = criteria.isArray;
+        criteria = {value: criteria.val, isArray: criteria.isArray};
+        criteria = H.accept(criteria);
+
+        // parse criteria
+        criteria = Criteria.parse(criteria);
+        let sum = 0;
+
+        range.forEach((row, rowNum) => {
+            row.forEach((value, colNum) => {
+                const valueToAdd = sumRange[rowNum][colNum];
+                if (typeof valueToAdd !== "number")
+                    return;
+                // wildcard
+                if (criteria.op === 'wc') {
+                    if (criteria.value.test(value)) {
+                        sum += valueToAdd;
+                    }
+
+                } else if (Infix.compareOp(value, criteria.op, criteria.value, Array.isArray(value), isCriteriaArray)) {
+                    sum += valueToAdd;
+                }
+            })
+        });
+        return sum;
     },
 
 
     SUMPRODUCT: (array1, ...arrays) => {
-        array1 = H.accept(array1, Types.ARRAY, null, false);
+        array1 = H.accept(array1, Types.ARRAY, null, false, true);
         arrays.forEach(array => {
-            array = H.accept(array, Types.ARRAY, null, false);
+            array = H.accept(array, Types.ARRAY, null, false, true);
             if (array1[0].length !== array[0].length || array1.length !== array.length)
                 throw FormulaError.VALUE;
             for (let i = 0; i < array1.length; i++) {

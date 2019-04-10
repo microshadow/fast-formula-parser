@@ -1,5 +1,5 @@
 const FormulaError = require('../error');
-const {FormulaHelpers, Types, WildCard} = require('../helpers');
+const {FormulaHelpers, Types, WildCard, ParamsTypes} = require('../helpers');
 const H = FormulaHelpers;
 
 // Spreadsheet number format
@@ -74,7 +74,9 @@ const TextFunctions = {
 
     CONCAT: (...params) => {
         let text = '';
-        H.flattenParams(params, Types.STRING, item => {
+        // does not allow union
+        H.flattenParams(params, Types.STRING, false, item => {
+            item = H.accept(item, Types.STRING);
             text += item;
         });
         return text
@@ -82,9 +84,14 @@ const TextFunctions = {
 
     CONCATENATE: (...params) => {
         let text = '';
-        H.flattenParams(params, Types.STRING, item => {
-            text += item;
-        }, false);
+        if (params.length === 0)
+            throw Error('CONCATENATE need at least one argument.');
+        params.forEach(param => {
+            // does not allow range reference, array, union
+            param = H.accept(param, Types.STRING);
+            text += param;
+        });
+
         return text;
     },
 
