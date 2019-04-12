@@ -1,7 +1,7 @@
-const FormulaError = require('../formulas/error');
-const {FormulaHelpers, Types, Address} = require('../formulas/helpers');
-const {Prefix, Postfix, Infix, Operators} = require('../formulas/operators');
-const Collection = require('./type/collection');
+const FormulaError = require('../../formulas/error');
+const {FormulaHelpers, Types, Address} = require('../../formulas/helpers');
+const {Prefix, Postfix, Infix, Operators} = require('../../formulas/operators');
+const Collection = require('../type/collection');
 const MAX_ROW = 1048576, MAX_COLUMN = 16384;
 
 class Utils {
@@ -52,41 +52,6 @@ class Utils {
         };
     }
 
-    parseColRange(col1, col2) {
-        // const res = colRange.match(/([$]?)([A-Za-z]{1,3}):([$]?)([A-Za-z]{1,4})/);
-        col1 = this.columnNameToNumber(col1);
-        col2 = this.columnNameToNumber(col2);
-        return {
-            ref: {
-                from: {
-                    col: Math.min(col1, col2),
-                    row: null
-                },
-                to: {
-                    col: Math.max(col1, col2),
-                    row: null
-                }
-            }
-        }
-    }
-
-    parseRowRange(row1, row2) {
-        // const res = rowRange.match(/([$]?)([1-9][0-9]*):([$]?)([1-9][0-9]*)/);
-        return {
-            ref: {
-                from: {
-                    col: null,
-                    row: Math.min(row1, row2),
-                },
-                to: {
-                    col: null,
-                    row: Math.max(row1, row2),
-                }
-            }
-
-        }
-    }
-
     /**
      * Apply + or - unary prefix.
      * @param {Array.<string>} prefixes
@@ -94,39 +59,19 @@ class Utils {
      * @return {*}
      */
     applyPrefix(prefixes, value) {
-        // console.log('applyPrefix', prefixes, value);
-        const {val, isArray} = this.extractRefValue(value);
-        if (this.isFormulaError(val))
-            return val;
-        return Prefix.unaryOp(prefixes, val, isArray);
+        this.extractRefValue(value);
+        return 0;
     }
 
     applyPostfix(value, postfix) {
-        // console.log('applyPostfix', value, postfix);
-        const {val, isArray} = this.extractRefValue(value);
-        if (this.isFormulaError(val))
-            return val;
-        return Postfix.percentOp(val, postfix, isArray);
+        this.extractRefValue(value);
+        return 0
     }
 
     applyInfix(value1, infix, value2) {
-        const res1 = this.extractRefValue(value1);
-        const val1 = res1.val, isArray1 = res1.isArray;
-        const res2 = this.extractRefValue(value2);
-        const val2 = res2.val, isArray2 = res2.isArray;
-        if (this.isFormulaError(val1))
-            return val1;
-        if (this.isFormulaError(val2))
-            return val2;
-        if (Operators.compareOp.includes(infix))
-            return Infix.compareOp(val1, infix, val2, isArray1, isArray2);
-        else if (Operators.concatOp.includes(infix))
-            return Infix.concatOp(val1, infix, val2, isArray1, isArray2);
-        else if (Operators.mathOp.includes(infix))
-            return Infix.mathOp(val1, infix, val2, isArray1, isArray2);
-        else
-            throw new Error(`Unrecognized infix: ${infix}`);
-
+        this.extractRefValue(value1);
+        this.extractRefValue(value2);
+        return 0;
     }
 
     applyIntersect(refs) {
@@ -286,15 +231,13 @@ class Utils {
      * @return {{val: *, isArray: boolean}}
      */
     extractRefValue(obj) {
-        let res = obj, isArray = false;
-        if (Array.isArray(res))
-            isArray = true;
+        const isArray = Array.isArray(obj);
         if (obj.ref) {
             // can be number or array
             return {val: this.context.retrieveRef(obj), isArray};
 
         }
-        return {val: res, isArray};
+        return {val: obj, isArray};
     }
 
     /**

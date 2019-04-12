@@ -1,5 +1,7 @@
 const lexing = require('./grammar/lexing');
 const {FormulaParser} = require('./grammar/hooks');
+const {DepParser} = require('./grammar/dependency/hooks');
+const SSF = require('./ssf/ssf');
 // const parser = new FormulaParser();
 
 
@@ -67,4 +69,6 @@ console.log(parser.parse(input, {row: 1, col: 1}));
 //     parser.parse(input)
 // }
 // console.log('done');
+FormulaParser.SSF = SSF;
+FormulaParser.DepParser = DepParser;
 module.exports = FormulaParser;

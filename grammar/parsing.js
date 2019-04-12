@@ -2,8 +2,6 @@ const lexer = require('./lexing');
 const chevrotain = require("chevrotain");
 const tokenVocabulary = lexer.tokenVocabulary;
 
-const Utils = require('./utils');
-
 const {
     // IntersectOp,
     WhiteSpace,
@@ -55,7 +53,7 @@ const {
 } = tokenVocabulary;
 
 class Parser extends chevrotain.Parser {
-    constructor(context) {
+    constructor(context, utils) {
         super(tokenVocabulary, {
             outputCst: false,
             maxLookahead: 1,
@@ -65,8 +63,7 @@ class Parser extends chevrotain.Parser {
                 // paren: {OR9: true}
             }
         });
-        const {getCell, getColumnRange, getRowRange, getRange, getVariable, callFunction} = context;
-        this.utils = context.utils;
+        this.utils = utils;
         const $ = this;
 
         // Adopted from https://github.com/spreadsheetlab/XLParser/blob/master/src/XLParser/ExcelFormulaGrammar.cs
@@ -292,7 +289,7 @@ class Parser extends chevrotain.Parser {
 
         $.RULE('reservedName', () => {
             const name = $.CONSUME(ReservedName).image;
-            return getVariable(name);
+            return context.getVariable(name);
         });
 
         $.RULE('constant', () => $.OR([
@@ -322,7 +319,8 @@ class Parser extends chevrotain.Parser {
                     // console.log('functionName', functionName);
                     const args = $.SUBRULE($.arguments);
                     $.CONSUME(CloseParen);
-                    return callFunction(functionName, args);
+                    // dependency parser won't call function.
+                    return context.callFunction(functionName, args);
                 }
             }
         ]));
@@ -383,7 +381,7 @@ class Parser extends chevrotain.Parser {
                     // console.log('refFunctionName', refFunctionName);
                     const args = $.SUBRULE($.arguments);
                     $.CONSUME2(CloseParen);
-                    return callFunction(refFunctionName, args);
+                    return context.callRefFunction(refFunctionName, args);
                 }
             }
         ]));
@@ -395,7 +393,7 @@ class Parser extends chevrotain.Parser {
 
         $.RULE('referenceItem', () => $.OR([
             {ALT: () => this.utils.parseCellAddress($.CONSUME(Cell).image)},
-            {ALT: () => getVariable($.CONSUME(Name).image)},
+            {ALT: () => context.getVariable($.CONSUME(Name).image)},
             {ALT: () => this.utils.parseCol($.CONSUME(Column).image)},
             // A row check should be here, but the token is same with Number,
             // In other to resolve ambiguities, I leave this empty, and

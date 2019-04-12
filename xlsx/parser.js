@@ -1,10 +1,11 @@
 const {FormulaHelpers, Address} = require('../formulas/helpers');
 const FormulaParser = require('../index');
+const {DepParser} = require('../grammar/dependency/hooks');
 const XlsxPopulate = require('xlsx-populate');
 const MAX_ROW = 1048576, MAX_COLUMN = 16384;
 
 let t = Date.now();
-let parser, wb;
+let parser, depParser, wb, rt, sheetNames = [];
 
 function getSharedFormula(cell, refCell) {
 
@@ -37,16 +38,89 @@ function getSharedFormula(cell, refCell) {
     return formula;
 }
 
+/**
+ * A reference table:  refA -> refB (refB depends on refA)
+ */
+class ReferenceTable {
+    constructor(sheetNames) {
+        this._data = new Map();
+        this._sheetNames = sheetNames;
+    }
+
+    /**
+     * refB depends on refA, which means changes on refA will trigger
+     * re-calculation on refB.
+     * refA -> refB
+     * @param refA - Dependency of refB
+     * @param refB
+     */
+    add(refA, refB) {
+        let sheet = refA.sheet;
+        if (typeof refA.sheet === "string")
+            sheet = this._sheetNames.indexOf(refA.sheet);
+        if (sheet === -1)
+            throw Error('ReferenceTable.add: Sheet name does not exist: ' + refA.sheet);
+        if (!this._data.get(sheet))
+            this._data.set(sheet, new Map());
+        let from, to;
+        if (refA.from) {
+            from = refA.from.row * 100000 + refA.from.col;
+            to = refA.to.row * 100000 + refA.to.col;
+        } else {
+            from = refA.row * 100000 + refA.col;
+            to = from;
+        }
+        if (!this._data.get(sheet).get(from))
+            this._data.get(sheet).set(from, new Map());
+        if (!this._data.get(sheet).get(from).get(to))
+            this._data.get(sheet).get(from).set(to, new Map());
+
+        if (!this._data.get(sheet).get(from).get(to).get(refB.sheet))
+            this._data.get(sheet).get(from).get(to).set(refB.sheet, []);
+
+        this._data.get(sheet).get(from).get(to).get(refB.sheet).push(refB.row * 100000 + refB.col);
+    }
+
+    /**
+     * Called when a cell's value is cleared.
+     * Remember refA -> refB,
+     * Ideally ref can be either refA or refB, but ref is treated as refA here. (Partial remove)
+     * In future calculation, we will check if refB is a formula, if it's not, remove it.
+     * @param ref
+     */
+    remove(ref) {
+
+    }
+
+    /**
+     * Get all cells need to update given a ref is modified. Called when a cell is modified.
+     * @param ref
+     */
+    get(ref, result) {
+        if (!result) result = [];
+        let sheet = ref.sheet;
+        if (typeof ref.sheet === "string")
+            sheet = this._sheetNames.indexOf(ref.sheet);
+        let data = this._data.get(sheet);
+        if (!data) return;
+        data = this._data.get(ref.row * 100000 + ref.col);
+        if (!sheet) return;
+    }
+}
+
+
 let tGetter = 0;
 
 function initParser() {
+    depParser = new DepParser({});
+
     parser = new FormulaParser({
         onCell: ref => {
             let t = Date.now();
             let val = null;
             const sheet = wb.sheet(ref.sheet);
             if (sheet._rows[ref.row] != null && sheet._rows[ref.row]._cells[ref.col] !== null) {
-                val =  sheet._rows[ref.row]._cells[ref.col]._value;
+                val = sheet._rows[ref.row]._cells[ref.col]._value;
             }
             // console.log(`Get cell ${val}`);
             tGetter += Date.now() - t;
@@ -101,14 +175,16 @@ function something(workbook) {
     console.log(`open workbook uses ${Date.now() - t}ms`);
     t = Date.now();
     const formulas = [];
+    workbook.sheets().forEach(sheet => sheetNames.push(sheet.name()));
+    rt = new ReferenceTable(sheetNames);
+
     workbook.sheets().forEach((sheet, sheetNo) => {
-        const name = sheet.name();
         const sharedFormulas = [];
         sheet._rows.forEach((row, rowNumber) => {
             // const rowStyle = styles[rowNumber - 1] = {};
             row._cells.forEach((cell, colNumber) => {
                 // process cell data
-                let formula = cell.formula();
+                let formula = (cell._formulaType === "shared" && !cell._formulaRef) ? "SHARED" : cell._formula;
                 if (typeof formula === 'string') {
                     // this is the parent shared formula
                     if (formula !== 'SHARED' && cell._sharedFormulaId !== undefined) {
@@ -117,16 +193,18 @@ function something(workbook) {
                         // convert this cell to normal formula
                         const refCell = sharedFormulas[cell._sharedFormulaId];
                         formula = getSharedFormula(cell, refCell);
-                        const oldValue = cell.value();
+                        const oldValue = cell._value;
                         cell.formula(formula)._value = oldValue;
                     }
                     formulas.push(formula);
                     // console.log(formula, `sheet: ${name}, row: ${rowNumber}, col: ${colNumber}`);
-                    const res = parser.parse(formula, {sheet: name, row: rowNumber, col: colNumber});
-                    if (res != null && res.result)
-                        cell._value = res.result;
-                    else
-                        cell._value = res;
+                    const position = {sheet: sheetNo, row: rowNumber, col: colNumber};
+                    const res = depParser.parse(formula, position);
+                    // if (res.length > 0) {
+                    //     res.forEach(refA => {
+                    //         rt.add(refA, position);
+                    //     })
+                    // }
 
                 }
             });
@@ -134,16 +212,19 @@ function something(workbook) {
     });
     console.log(`process formulas uses ${Date.now() - t}ms, with ${formulas.length} formulas, query data uses ${tGetter}ms`);
     t = Date.now();
-
     // get data
-    // const res = parser.parse('IFERROR(Mandatories!$B$1:$I$3012)',
-    //     {sheet: 'Act_Summary'});
-    // console.log(res);
-    // console.log(`process formulas uses ${Date.now() - t}ms, query data uses ${tGetter}ms`);
+    // console.log(JSON.stringify(rt._data).length)
+    const res = depParser.parse('SUM(B2:IF(TRUE, INDEX(A2:C6, 5, 2)))', {});
+    console.log(res);
+    console.log(`process formulas uses ${Date.now() - t}ms`);
 }
 
+setTimeout(() => {
+    t = Date.now();
+    XlsxPopulate.fromFileAsync("./xlsx/test.xlsx").then(something)
+}, 0);
 
-XlsxPopulate.fromFileAsync("./xlsx/test.xlsx").then(something);
+
 // 2019/4/9 20:00
 // open workbook uses 1235ms
 // process formulas uses 315450ms, with 26283 formulas.
