@@ -4,6 +4,10 @@ const {Infix} = require('../operators');
 const H = FormulaHelpers;
 
 const StatisticalFunctions = {
+    AVEDEV:() => {
+
+    },
+
     COUNT: (...ranges) => {
         let cnt = 0;
         H.flattenParams(ranges, null, true,

@@ -71,7 +71,7 @@ const EngineeringFunctions = {
 
     BIN2HEX: (number, places) => {
         number = H.accept(number, Types.NUMBER_NO_BOOLEAN);
-        places = H.accept(places, Types.NUMBER);
+        places = H.accept(places, Types.NUMBER,undefined);
         // truncate places in case it is not an integer
         places = Math.floor(places);
         if (places < 0) {

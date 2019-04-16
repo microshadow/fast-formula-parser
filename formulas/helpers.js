@@ -186,11 +186,11 @@ class FormulaHelpers {
      *                     only applicable when type is ARRAY.
      * @return {string|number|boolean|{}|Array}
      */
-    accept(param, type = null, defValue = null, flat = true, allowSingleValue = false) {
+    accept(param, type = null, defValue, flat = true, allowSingleValue = false) {
         // TODO: remove this array check
         if (Array.isArray(type))
             type = type[0];
-        if (param == null && defValue == null) {
+        if (param == null && defValue === undefined) {
             throw FormulaError.ARG_MISSING([type]);
         } else if (param == null)
             return defValue;
