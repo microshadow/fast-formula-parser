@@ -1,6 +1,7 @@
 const FormulaError = require('../error');
 const {FormulaHelpers, Types, WildCard, Criteria} = require('../helpers');
 const {Infix} = require('../operators');
+const jStat = require("jStat");
 const H = FormulaHelpers;
 
 const StatisticalFunctions = {

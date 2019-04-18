@@ -4,6 +4,7 @@ const {FormulaHelpers, Types} = require('../helpers');
 const H = FormulaHelpers;
 const bessel = require("bessel");
 const jStat = require("jStat");
+const log = console.log;
 
 const EngineeringFunctions = {
     BESSELI: (x, n) => {
@@ -71,12 +72,8 @@ const EngineeringFunctions = {
 
     BIN2HEX: (number, places) => {
         number = H.accept(number, Types.NUMBER_NO_BOOLEAN);
-        places = H.accept(places, Types.NUMBER,undefined);
-        // truncate places in case it is not an integer
-        places = Math.floor(places);
-        if (places < 0) {
-            throw FormulaError.NUM;
-        }
+        let defaultPlace = (parseInt(number, 2).toString(16)).length;
+        places = H.accept(places, Types.NUMBER_NO_BOOLEAN, defaultPlace);
 
         let numberStr = number.toString();
         if (numberStr.length > 10) {
@@ -85,12 +82,18 @@ const EngineeringFunctions = {
         if (numberStr.length === 10 && numberStr.substring(0, 1) === '1') {
             return (parseInt(numberStr.substring(1), 2) + 1099511627264).toString(16).toUpperCase()
         }
-
+        // convert BIN to HEX
         let result = parseInt(number, 2).toString(16);
-        if (places === undefined) {
-            return result.toUpperCase();
+
+        if (isNaN(places)) {
+            throw FormulaError.VALUE;
         }
-        if (places >= result.length){
+        if (places < 0) {
+            throw FormulaError.NUM;
+        }
+        // truncate places in case it is not an integer
+        places = Math.floor(places);
+        if (places >= result.length) {
             return (TextFunctions.REPT('0', places - result.length) + result).toUpperCase();
         } else {
             throw FormulaError.NUM;
@@ -119,7 +122,7 @@ const EngineeringFunctions = {
         if (places === undefined) {
             return result;
         }
-        if (places < result.length){
+        if (places < result.length) {
             throw FormulaError.NUM;
         }
 
@@ -186,7 +189,7 @@ const EngineeringFunctions = {
         }
 
         let result;
-        if (shiftAmount >= 0){
+        if (shiftAmount >= 0) {
             result = number >> shiftAmount;
         } else {
             result = number << -shiftAmount;
@@ -216,23 +219,34 @@ const EngineeringFunctions = {
     },
 
     COMPLEX: (realNum, iNum, suffix) => {
-        realNum = H.accept(realNum, Types.NUMBER);
-        iNum = H.accept(iNum, Types.NUMBER);
-        suffix = H.accept(realNum, [Types.STRING], false);
+        realNum = H.accept(realNum, Types.NUMBER_NO_BOOLEAN);
+        iNum = H.accept(iNum, Types.NUMBER_NO_BOOLEAN);
+        suffix = H.accept(suffix, Types.STRING, "i");
+        suffix = (suffix === undefined) ? "i" : suffix;
         if (suffix !== "i" && suffix !== "j") {
             throw FormulaError.VALUE;
         }
-        suffix = (suffix === undefined) ? "i" : suffix;
-
         if (realNum === 0 && iNum === 0) {
             return 0;
         } else if (realNum === 0) {
-            return (iNum === 1) ? suffix : iNum.toString() + suffix;
+            if (iNum === 1) {
+                return suffix;
+            } else if (iNum === -1) {
+                return "-" + suffix;
+            } else {
+                return iNum.toString() + suffix;
+            }
         } else if (iNum === 0) {
             return realNum.toString()
         } else {
-            let sign = (iNum > 0) ? "+" : "-";
-            return realNum.toString() + sign + ((iNum === 1) ? suffix : iNum.toString() + suffix);
+            let sign = (iNum > 0) ? "+" : "";
+            if (iNum === 1) {
+                return realNum.toString() + sign + suffix;
+            } else if (iNum === -1) {
+                return realNum.toString() + sign + "-" + suffix;
+            } else {
+                return realNum.toString() + sign + iNum.toString() + suffix;
+            }
         }
     },
 
@@ -318,29 +332,26 @@ const EngineeringFunctions = {
     },
 
     DELTA: (number1, number2) => {
-        number1 = H.accept(number1, Types.NUMBER);
-        number2 = H.accept(number2, Types.NUMBER, false);
-        number2 = (number2 === undefined) ? 0 : number2;
+        number1 = H.accept(number1, Types.NUMBER_NO_BOOLEAN);
+        number2 = H.accept(number2, Types.NUMBER_NO_BOOLEAN, 0);
 
-        return Math.floor(number1) === Math.floor(number2) ? 1 : 0;
+        return number1 === number2 ? 1 : 0;
     },
 
     ERF: (lowerLimit, upperLimit) => {
-        lowerLimit = H.accept(lowerLimit, Types.NUMBER);
-        upperLimit = H.accept(upperLimit, Types.NUMBER, false);
-        upperLimit = (upperLimit === undefined) ? 0 : upperLimit;
+        lowerLimit = H.accept(lowerLimit, Types.NUMBER_NO_BOOLEAN);
+        upperLimit = H.accept(upperLimit, Types.NUMBER_NO_BOOLEAN, 0);
         return jStat.erf(lowerLimit);
     },
 
     ERFC: (x) => {
-        x = H.accept(x, Types.NUMBER);
+        x = H.accept(x, Types.NUMBER_NO_BOOLEAN);
         return jStat.erfc(x);
     },
 
     GESTEP: (number, step) => {
-        number = H.accept(number, Types.NUMBER);
-        step = H.accept(step, Types.NUMBER, false);
-        step = (step === undefined) ? 0 : step;
+        number = H.accept(number, Types.NUMBER_NO_BOOLEAN);
+        step = H.accept(step, Types.NUMBER_NO_BOOLEAN, 0);
         return number >= step ? 1 : 0;
     },
 
@@ -404,14 +415,14 @@ const EngineeringFunctions = {
     },
 
     IMABS: (iNumber) => {
-        iNumber = H.accept(iNumber, [Types.STRING]);
+        iNumber = H.accept(iNumber, Types.STRING);
         let real = EngineeringFunctions.IMREAL(iNumber);
         let imaginary = EngineeringFunctions.IMAGINARY(iNumber);
         return Math.sqrt(Math.pow(real, 2) + Math.pow(imaginary, 2));
     },
 
     IMAGINARY: (iNumber) => {
-        iNumber = H.accept(iNumber, [Types.STRING]);
+        iNumber = H.accept(iNumber, Types.STRING);
         if (iNumber === 0 || iNumber === '0') {
             return 0;
         }
@@ -441,11 +452,11 @@ const EngineeringFunctions = {
             if (plusSign >= 0) {
                 return Number(iNumber.substring(plusSign + 1, iNumber.length - 1));
             } else {
-                return -Number(iNumber.substring(plusSign + 1, iNumber.length - 1));
+                return -Number(iNumber.substring(minusSign + 1, iNumber.length - 1));
             }
         } else {
             if (validUnit) {
-                return iNumber.substring(0, iNumber.length - 1);
+                return Number(iNumber.substring(0, iNumber.length - 1));
             } else {
                 return 0;
             }
@@ -453,7 +464,7 @@ const EngineeringFunctions = {
     },
 
     IMARGUMENT: (iNumber) => {
-        iNumber = H.accept(iNumber, [Types.STRING]);
+        iNumber = H.accept(iNumber, Types.STRING);
         let real = EngineeringFunctions.IMREAL(iNumber);
         let imaginary = EngineeringFunctions.IMAGINARY(iNumber);
         // x + yi => x cannot be 0, since theta = tan-1(y / x)
@@ -488,17 +499,18 @@ const EngineeringFunctions = {
     },
 
     IMCONJUGATE: (iNumber) => {
-        iNumber = H.accept(iNumber, [Types.STRING]);
+        iNumber = H.accept(iNumber, Types.STRING);
         let real = EngineeringFunctions.IMREAL(iNumber);
         let imaginary = EngineeringFunctions.IMAGINARY(iNumber);
         // look up unit
         let unit = iNumber.substring(iNumber.length - 1, iNumber.length);
         unit = (unit === 'i' || unit === 'j') ? unit : 'i';
-        return (imaginary !== 0) ? EngineeringFunctions.COMPLEX(real, imaginary, unit) : iNumber;
+        console.log(imaginary);
+        return (imaginary !== 0) ? EngineeringFunctions.COMPLEX(real, -imaginary, unit) : iNumber;
     },
 
     IMCOS: (iNumber) => {
-        iNumber = H.accept(iNumber, [Types.STRING]);
+        iNumber = H.accept(iNumber, Types.STRING);
         let real = EngineeringFunctions.IMREAL(iNumber);
         let imaginary = EngineeringFunctions.IMAGINARY(iNumber);
         // look up unit
@@ -506,11 +518,12 @@ const EngineeringFunctions = {
         unit = (unit === 'i' || unit === 'j') ? unit : 'i';
         let realInput = Math.cos(real) * (Math.exp(imaginary) + Math.exp(-imaginary)) / 2;
         let imaginaryInput = -Math.sin(real) * (Math.exp(imaginary) - Math.exp(-imaginary)) / 2;
+
         return EngineeringFunctions.COMPLEX(realInput, imaginaryInput, unit);
     },
 
     IMCOSH: (iNumber) => {
-        iNumber = H.accept(iNumber, [Types.STRING]);
+        iNumber = H.accept(iNumber, Types.STRING);
         let real = EngineeringFunctions.IMREAL(iNumber);
         let imaginary = EngineeringFunctions.IMAGINARY(iNumber);
         // look up unit
@@ -523,7 +536,7 @@ const EngineeringFunctions = {
     },
 
     IMCOT: (iNumber) => {
-        iNumber = H.accept(iNumber, [Types.STRING]);
+        iNumber = H.accept(iNumber, Types.STRING);
         if (iNumber === true || iNumber === false) {
             throw FormulaError.VALUE;
         }
@@ -533,7 +546,7 @@ const EngineeringFunctions = {
     },
 
     IMCSC: (iNumber) => {
-        iNumber = H.accept(iNumber, [Types.STRING]);
+        iNumber = H.accept(iNumber, Types.STRING);
         if (iNumber === true || iNumber === false) {
             throw FormulaError.VALUE;
         }
@@ -542,7 +555,7 @@ const EngineeringFunctions = {
     },
 
     IMCSCH: (iNumber) => {
-        iNumber = H.accept(iNumber, [Types.STRING]);
+        iNumber = H.accept(iNumber, Types.STRING);
         if (iNumber === true || iNumber === false) {
             throw FormulaError.VALUE;
         }
@@ -551,8 +564,8 @@ const EngineeringFunctions = {
     },
 
     IMDIV: (iNumber1, iNumber2) => {
-        iNumber1 = H.accept(iNumber1, [Types.STRING]);  // a + bi
-        iNumber2 = H.accept(iNumber2, [Types.STRING]);  // c + di
+        iNumber1 = H.accept(iNumber1, Types.STRING);  // a + bi
+        iNumber2 = H.accept(iNumber2, Types.STRING);  // c + di
         let a = EngineeringFunctions.IMREAL(iNumber1);
         let b = EngineeringFunctions.IMAGINARY(iNumber1);
         let c = EngineeringFunctions.IMREAL(iNumber2);
@@ -572,7 +585,7 @@ const EngineeringFunctions = {
     },
 
     IMEXP: (iNumber) => {
-        iNumber = H.accept(iNumber, [Types.STRING]);
+        iNumber = H.accept(iNumber, Types.STRING);
         if (iNumber === true || iNumber === false) {
             throw FormulaError.VALUE;
         }
@@ -588,7 +601,7 @@ const EngineeringFunctions = {
     },
 
     IMLN: (iNumber) => {
-        iNumber = H.accept(iNumber, [Types.STRING]);
+        iNumber = H.accept(iNumber, Types.STRING);
         let real = EngineeringFunctions.IMREAL(iNumber);
         let imaginary = EngineeringFunctions.IMAGINARY(iNumber);
 
@@ -599,7 +612,7 @@ const EngineeringFunctions = {
     },
 
     IMLOG10: (iNumber) => {
-        iNumber = H.accept(iNumber, [Types.STRING]);
+        iNumber = H.accept(iNumber, Types.STRING);
         let real = EngineeringFunctions.IMREAL(iNumber);
         let imaginary = EngineeringFunctions.IMAGINARY(iNumber);
         // look up imaginary unit
@@ -611,7 +624,7 @@ const EngineeringFunctions = {
     },
 
     IMLOG2: (iNumber) => {
-        iNumber = H.accept(iNumber, [Types.STRING]);
+        iNumber = H.accept(iNumber, Types.STRING);
         let real = EngineeringFunctions.IMREAL(iNumber);
         let imaginary = EngineeringFunctions.IMAGINARY(iNumber);
         // look up imaginary unit
@@ -623,7 +636,7 @@ const EngineeringFunctions = {
     },
 
     IMPOWER: (iNumber, number) => {
-        iNumber = H.accept(iNumber, [Types.STRING]);
+        iNumber = H.accept(iNumber, Types.STRING);
         number = H.accept(number, Types.NUMBER);
 
         // look up imaginary unit
@@ -656,12 +669,12 @@ const EngineeringFunctions = {
     },
 
     IMREAL: (iNumber) => {
-        iNumber = H.accept(iNumber, [Types.STRING]);
+        iNumber = H.accept(iNumber, Types.STRING);
         if (iNumber === 0 || iNumber === '0') {
             return 0;
         }
         // handle special cases
-        if (['i', '+i', '1i', '-i', '-1i', 'j', '+j', '1j', '+1j', '-j', '-1j'].indexOf(iNumber) >= 0) {
+        if (['i', '+i', '1i', '+1i', '-i', '-1i', 'j', '+j', '1j', '+1j', '-j', '-1j'].indexOf(iNumber) >= 0) {
             return 0;
         }
         // look up sign
@@ -690,14 +703,13 @@ const EngineeringFunctions = {
             if (validUnit) {
                 return 0;
             } else {
-                return iNumber;
+                return Number(iNumber);   // should use Number instead if parseInt
             }
         }
-
     },
 
     IMSEC: (iNumber) => {
-        iNumber = H.accept(iNumber, [Types.STRING]);
+        iNumber = H.accept(iNumber, Types.STRING);
         if (iNumber === true || iNumber === false) {
             throw FormulaError.VALUE;
         }
@@ -705,7 +717,7 @@ const EngineeringFunctions = {
     },
 
     IMSECH: (iNumber) => {
-        iNumber = H.accept(iNumber, [Types.STRING]);
+        iNumber = H.accept(iNumber, Types.STRING);
         if (iNumber === true || iNumber === false) {
             throw FormulaError.VALUE;
         }
@@ -713,7 +725,7 @@ const EngineeringFunctions = {
     },
 
     IMSIN: (iNumber) => {
-        iNumber = H.accept(iNumber, [Types.STRING]);
+        iNumber = H.accept(iNumber, Types.STRING);
         let real = EngineeringFunctions.IMREAL(iNumber);
         let imaginary = EngineeringFunctions.IMAGINARY(iNumber);
         // look up unit
@@ -726,7 +738,7 @@ const EngineeringFunctions = {
     },
 
     IMSINH: (iNumber) => {
-        iNumber = H.accept(iNumber, [Types.STRING]);
+        iNumber = H.accept(iNumber, Types.STRING);
         let real = EngineeringFunctions.IMREAL(iNumber);
         let imaginary = EngineeringFunctions.IMAGINARY(iNumber);
 
@@ -739,7 +751,7 @@ const EngineeringFunctions = {
     },
 
     IMSQRT: (iNumber) => {
-        iNumber = H.accept(iNumber, [Types.STRING]);
+        iNumber = H.accept(iNumber, Types.STRING);
         // look up unit
         let unit = iNumber.substring(iNumber.length - 1, iNumber.length);
         unit = (unit === 'i' || unit === 'j') ? unit : 'i';
@@ -751,8 +763,8 @@ const EngineeringFunctions = {
     },
 
     IMSUB: (iNumber1, iNumber2) => {
-        iNumber1 = H.accept(iNumber1, [Types.STRING]);
-        iNumber2 = H.accept(iNumber2, [Types.STRING]);
+        iNumber1 = H.accept(iNumber1, Types.STRING);
+        iNumber2 = H.accept(iNumber2, Types.STRING);
         let a = EngineeringFunctions.IMREAL(iNumber1);
         let b = EngineeringFunctions.IMAGINARY(iNumber1);
         let c = EngineeringFunctions.IMREAL(iNumber2);
@@ -782,7 +794,7 @@ const EngineeringFunctions = {
     },
 
     IMTAN: (iNumber) => {
-        iNumber = H.accept(iNumber, [Types.STRING]);
+        iNumber = H.accept(iNumber, Types.STRING);
         if (iNumber === true || iNumber === false) {
             throw FormulaError.VALUE;
         }
@@ -792,7 +804,7 @@ const EngineeringFunctions = {
     },
 
     OCT2BIN: (number, places) => {
-        number = H.accept(number, [Types.STRING]);
+        number = H.accept(number, Types.STRING);
         places = H.accept(places, Types.NUMBER, false);
         // if places is not an integer, it is truncated
         places = Math.floor(places);
@@ -824,14 +836,14 @@ const EngineeringFunctions = {
     },
 
     OCT2DEC: (number) => {
-        number = H.accept(number, [Types.STRING]);
+        number = H.accept(number, Types.STRING);
         // conver to DEC
         let result = parseInt(number, 8);
         return (result >= 536870912) ? result - 1073741824 : result;
     },
 
     OCT2HEX: (number, places) => {
-        number = H.accept(number, [Types.STRING]);
+        number = H.accept(number, Types.STRING);
         places = H.accept(places, Types.NUMBER, false);
         // if places is not an integer, it is truncated
         places = Math.floor(places);
