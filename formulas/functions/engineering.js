@@ -102,31 +102,31 @@ const EngineeringFunctions = {
 
     BIN2OCT: (number, places) => {
         number = H.accept(number, Types.NUMBER_NO_BOOLEAN);
-        places = H.accept(places, Types.NUMBER, undefined);
-        // truncate places in case it is not integer
-        places = Math.floor(places);
-        if (places < 0) {
-            throw FormulaError.NUM;
-        }
+        let defaultPlace = parseInt(number, 2).toString(8).length;
+        places = H.accept(places, Types.NUMBER_NO_BOOLEAN, defaultPlace);
 
         let numberStr = number.toString();
         if (numberStr.length > 10) {
-            console.log("length us greater than 10");
             throw FormulaError.NUM;
         }
         if (numberStr.length === 10 && numberStr.substr(0, 1) === "1") {
             return (parseInt(numberStr.substr(1), 2) + 1073741312).toString(8);
         }
-
         let result = parseInt(number, 2).toString(8);
-        if (places === undefined) {
-            return result;
+        if (isNaN(places)){
+            throw FormulaError.VALUE;
         }
-        if (places < result.length) {
+        if (places < 0){
+            return FormulaError.NUM;
+        }
+
+        // truncate places in case it is not integer
+        places = Math.floor(places);
+        if (places >= result.length) {
+            return TextFunctions.REPT(0, places - result.length) + result;
+        } else {
             throw FormulaError.NUM;
         }
-
-        return TextFunctions.REPT(0, places - result.length) + result;
     },
 
     BITAND: (number1, number2) => {
@@ -250,24 +250,11 @@ const EngineeringFunctions = {
         }
     },
 
-    // convert a number from one measurement system to another. For example, it can translate a table of
-    // distances in miles to a table of distances in kilometers.
-    CONVERT: (number, fromUnit, toUnit) => {
-        number = H.accept(number, Types.NUMBER);
-
-        // list of units supported by CONVERT and units defined by the International System of Unites
-    },
-
     DEC2BIN: (number, places) => {
-        number = H.accept(number, Types.NUMBER);
-        places = H.accept(places, Types.NUMBER, false);
+        number = H.accept(number, Types.NUMBER_NO_BOOLEAN);
+        let defaultPlace = parseInt(number, 10).toString(2).length;
+        places = H.accept(places, Types.NUMBER_NO_BOOLEAN, defaultPlace);
         if (number < -512 || number > 512) {
-            throw FormulaError.NUM;
-        }
-
-        // if places is not an integer, it is truncated
-        places = Math.floor(places);
-        if (places <= 0) {
             throw FormulaError.NUM;
         }
 
@@ -275,59 +262,55 @@ const EngineeringFunctions = {
         if (number < 0) {
             return "1" + TextFunctions.REPT("0", 9 - (512 + number).toString(2).length) + (512 + number).toString(2);
         }
-
         let result = parseInt(number, 10).toString(2);
-        if (typeof places === 'undefined') {
-            return result;
-        }
-        return (places >= result.length) ? TextFunctions.REPT("0", places - result.length) + result : FormulaError.NUM;
-    },
 
-    DEC2HEX: (number, places) => {
-        number = H.accept(number, Types.NUMBER);
-        places = H.accept(places, Types.NUMBER, false);
-        if (number < -549755813888 || number > 549755813888) {
-            throw FormulaError.NUM;
-        }
         // if places is not an integer, it is truncated
         places = Math.floor(places);
         if (places <= 0) {
             throw FormulaError.NUM;
         }
 
+        return (places >= result.length) ? TextFunctions.REPT("0", places - result.length) + result : FormulaError.NUM;
+    },
+
+    DEC2HEX: (number, places) => {
+        number = H.accept(number, Types.NUMBER_NO_BOOLEAN);
+        let defaultPlace = parseInt(number, 10).toString(16).length;
+        places = H.accept(places, Types.NUMBER_NO_BOOLEAN, defaultPlace);
+        if (number < -549755813888 || number > 549755813888) {
+            throw FormulaError.NUM;
+        }
         // if the number is negative, valid place values are ignored and it returns a 10-character binary number.
         if (number < 0) {
-            return (1099511627776 + number).toString(16);
+            return (1099511627776 + number).toString(16).toUpperCase();
         }
-
-        let result = parseInt(number, 10).toString(16);
-        if (typeof places === 'undefined') {
-            return result;
+        let result = parseInt(number, 10).toString(16).toUpperCase();
+        // if places is not an integer, it is truncated
+        places = Math.floor(places);
+        if (places <= 0) {
+            throw FormulaError.NUM;
         }
         return (places >= result.length) ? TextFunctions.REPT(0, places - result.length) + result : FormulaError.NUM;
     },
 
     DEC2OCT: (number, places) => {
-        number = H.accept(number, Types.NUMBER);
-        places = H.accept(places, Types.NUMBER, false);
+        number = H.accept(number, Types.NUMBER_NO_BOOLEAN);
+        let defaultSpace = parseInt(number, 10).toString(8).length;
+        places = H.accept(places, Types.NUMBER_NO_BOOLEAN, defaultSpace);
         if (number < -536870912 || number > 536870912) {
             throw FormulaError.NUM;
         }
+        // if the number is negative, valid place values are ignored and it returns a 10-character binary number.
+        if (number < 0) {
+            return (number + 1073741824).toString(8);
+        }
+        let result = parseInt(number, 10).toString(8);
         // if places is not an integer, it is truncated
         places = Math.floor(places);
         if (places <= 0) {
             throw FormulaError.NUM;
         }
 
-        // if the number is negative, valid place values are ignored and it returns a 10-character binary number.
-        if (number < 0) {
-            return (number + 1073741824).toString(8);
-        }
-
-        let result = parseInt(number, 10).toString(8);
-        if (typeof places === "undefined") {
-            return result;
-        }
         return (places >= result.length) ? TextFunctions.REPT('0', places - result.length) + result : FormulaError.NUM;
     },
 
@@ -356,12 +339,9 @@ const EngineeringFunctions = {
     },
 
     HEX2BIN: (number, places) => {
-        number = H.accept(number, Types.NUMBER);
-        places = H.accept(places, Types.NUMBER, false);
-        // if places is not an integer, it is truncated.
-        places = Math.floor(places);
-        if (places < 0) {
-            throw FormulaError.NUM;
+        number = H.accept(number, Types.STRING);
+        if (number === "TRUE" || number === "FALSE"){
+            throw FormulaError.VALUE;
         }
         // to check if the number is negative
         let ifNegative = (number.length === 10 && number.substr(0, 1).toLowerCase() === "f");
@@ -375,16 +355,25 @@ const EngineeringFunctions = {
         if (ifNegative) {
             return "1" + TextFunctions.REPT('0', 9 - (toDecimal + 512).toString(2).length) + (toDecimal + 512).toString(2)
         }
+
+        let defaultPlace = toDecimal.toString(2).length;
+        places = H.accept(places, Types.NUMBER_NO_BOOLEAN, defaultPlace);
+
         // convert decimal to binary
         let toBinary = toDecimal.toString(2);
-        if (places === undefined) {
-            return toBinary;
+        // if places is not an integer, it is truncated.
+        places = Math.floor(places);
+        if (places < 0) {
+            throw FormulaError.NUM;
         }
         return (places >= toBinary.length) ? TextFunctions.REPT('0', places - toBinary.length) + toBinary : FormulaError.NUM;
     },
 
     HEX2DEC: (number) => {
-        number = H.accept(number, Types.NUMBER);
+        number = H.accept(number, Types.STRING);
+        if (number === "TRUE" || number === "FALSE"){
+            throw FormulaError.NUM;
+        }
         let result = parseInt(number, 16);
         return (result >= 549755813888) ? result - 1099511627776 : result;
     },
