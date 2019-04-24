@@ -6,6 +6,7 @@ const EngFunctions = require('../formulas/functions/engineering');
 const ReferenceFunctions = require('../formulas/functions/reference');
 const InformationFunctions = require('../formulas/functions/information');
 const StatisticalFunctions = require('../formulas/functions/statistical');
+const DateFunctions = require('../formulas/functions/date');
 const FormulaError = require('../formulas/error');
 const {FormulaHelpers} = require('../formulas/helpers');
 const {Parser, allTokens} = require('./parsing');
@@ -15,20 +16,20 @@ const Utils = require('./utils');
 class FormulaParser {
 
     /**
-     * @param {{[functions]: {}, [variables]: {}, onCell: function, onRange: function}} [config]
+     * @param {{[functions]: {}, onVariable: function, onCell: function, onRange: function}} [config]
      */
     constructor(config) {
         this.logs = [];
         this.utils = new Utils(this);
         config = Object.assign({
             functions: {},
-            variables: {},
+            onVariable: () => null,
             onCell: () => 0,
             onRange: () => [[0]],
         }, config);
 
-        this.variables = config.variables;
-        this.functions = Object.assign({}, StatisticalFunctions, InformationFunctions, ReferenceFunctions,
+        this.onVariable = config.onVariable;
+        this.functions = Object.assign({}, DateFunctions, StatisticalFunctions, InformationFunctions, ReferenceFunctions,
             EngFunctions, LogicalFunctions, TextFunctions, MathFunctions, TrigFunctions, config.functions);
         this.onRange = config.onRange;
         this.onCell = config.onCell;
@@ -39,7 +40,8 @@ class FormulaParser {
             .concat(Object.keys(LogicalFunctions))
             .concat(Object.keys(EngFunctions))
             .concat(Object.keys(ReferenceFunctions))
-            .concat(Object.keys(StatisticalFunctions));
+            .concat(Object.keys(StatisticalFunctions))
+            .concat(Object.keys(DateFunctions));
 
         // functions need context and don't need to retrieve references
         this.funsNeedContextAndNoDataRetrieve = ['ROW', 'ROWS', 'COLUMN', 'COLUMNS', 'SUMIF', 'INDEX'];
@@ -47,8 +49,6 @@ class FormulaParser {
         this.funsPreserveRef = Object.keys(InformationFunctions);
 
         this.parser = new Parser(this, this.utils);
-        // dependency parser
-        this.depParser = new Parser(this, this.depUtils);
     }
 
     /**
@@ -91,10 +91,15 @@ class FormulaParser {
      */
     getVariable(name) {
         // console.log('get variable', name);
-        const val = this.variables[name];
-        if (val === undefined || val === null)
+        const res = {ref: this.onVariable(name, this.position.sheet)};
+        if (res.ref == null)
             return FormulaError.NAME;
-        return val;
+        if (FormulaHelpers.isCellRef(res))
+            this.getCell(res);
+        else {
+            this.getRange(res);
+        }
+        return res;
     }
 
     /**
@@ -246,10 +251,10 @@ class FormulaParser {
         else if (type === 'object') {
             if (result instanceof FormulaError)
                 return result;
-            if (result.ref && !result.ref.from) {
+            if (result.ref && result.ref.row && !result.ref.from) {
                 // single cell reference
                 result = this.retrieveRef(result);
-            } else if (result.ref && result.ref.from.col === result.ref.to.col) {
+            } else if (result.ref && result.ref.from && result.ref.from.col === result.ref.to.col) {
                 // single Column reference
                 result = this.retrieveRef({
                     ref: {

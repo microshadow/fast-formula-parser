@@ -1,21 +1,27 @@
 const FormulaError = require('../error');
-const TextFunctions = require('../text');
+const TextFunctions = require('./text');
 const {FormulaHelpers, Types} = require('../helpers');
 const H = FormulaHelpers;
 const bessel = require("bessel");
-const jStat = require("jStat");
+const jStat = require("jstat");
 const log = console.log;
+const MAX_OCT = 536870911, // OCT2DEC(3777777777)
+    MIN_OCT = -536870912, // OCT2DEC4000000000)
+    MAX_HEX = 549755813887,
+    MIN_HEX = -549755813888,
+    MAX_BIN = 511, // BIN2DEC(111111111)
+    MIN_BIN = -512; // BIN2DEC(1000000000)
+
 
 const EngineeringFunctions = {
     BESSELI: (x, n) => {
         x = H.accept(x, Types.NUMBER_NO_BOOLEAN);
         n = H.accept(n, Types.NUMBER_NO_BOOLEAN);
         // if n is not an integer, it is truncated.
-        n = Math.floor(n);
+        n = Math.trunc(n);
         if (n < 0) {
             throw FormulaError.NUM;
         }
-
         return bessel.besseli(x, n);
     },
 
@@ -23,11 +29,10 @@ const EngineeringFunctions = {
         x = H.accept(x, Types.NUMBER_NO_BOOLEAN);
         n = H.accept(n, Types.NUMBER_NO_BOOLEAN);
         // if n is not an integer, it is truncated.
-        n = Math.floor(n);
+        n = Math.trunc(n);
         if (n < 0) {
             throw FormulaError.NUM;
         }
-
         return bessel.besselj(x, n);
     },
 
@@ -35,7 +40,7 @@ const EngineeringFunctions = {
         x = H.accept(x, Types.NUMBER_NO_BOOLEAN);
         n = H.accept(n, Types.NUMBER_NO_BOOLEAN);
         // if n is not an integer, it is truncated.
-        n = Math.floor(n);
+        n = Math.trunc(n);
         if (n < 0) {
             throw FormulaError.NUM;
         }
@@ -47,7 +52,7 @@ const EngineeringFunctions = {
         x = H.accept(x, Types.NUMBER_NO_BOOLEAN);
         n = H.accept(n, Types.NUMBER_NO_BOOLEAN);
         // if n is not an integer, it is truncated.
-        n = Math.floor(n);
+        n = Math.trunc(n);
         if (n < 0) {
             throw FormulaError.NUM;
         }
@@ -64,7 +69,7 @@ const EngineeringFunctions = {
         }
 
         if (numberStr.length === 10 && numberStr.substring(0, 1) === '1') {
-            return parseInt(numberStr.substring(1), 2) - 512;
+            return parseInt(numberStr.substring(1), 2) + MIN_BIN;
         } else {
             return parseInt(numberStr, 2);
         }
@@ -72,38 +77,37 @@ const EngineeringFunctions = {
 
     BIN2HEX: (number, places) => {
         number = H.accept(number, Types.NUMBER_NO_BOOLEAN);
-        let defaultPlace = (parseInt(number, 2).toString(16)).length;
-        places = H.accept(places, Types.NUMBER_NO_BOOLEAN, defaultPlace);
+        places = H.accept(places, Types.NUMBER_NO_BOOLEAN, null);
 
-        let numberStr = number.toString();
+        const numberStr = number.toString();
         if (numberStr.length > 10) {
             throw FormulaError.NUM;
         }
         if (numberStr.length === 10 && numberStr.substring(0, 1) === '1') {
-            return (parseInt(numberStr.substring(1), 2) + 1099511627264).toString(16).toUpperCase()
+            return (parseInt(numberStr.substring(1), 2) + 1099511627264).toString(16).toUpperCase();
         }
         // convert BIN to HEX
-        let result = parseInt(number, 2).toString(16);
+        const result = parseInt(number, 2).toString(16);
 
-        if (isNaN(places)) {
-            throw FormulaError.VALUE;
-        }
-        if (places < 0) {
-            throw FormulaError.NUM;
-        }
-        // truncate places in case it is not an integer
-        places = Math.floor(places);
-        if (places >= result.length) {
-            return (TextFunctions.REPT('0', places - result.length) + result).toUpperCase();
+        if (places == null) {
+            return result.toUpperCase();
         } else {
-            throw FormulaError.NUM;
+            if (places < 0) {
+                throw FormulaError.NUM;
+            }
+            // truncate places in case it is not an integer
+            places = Math.trunc(places);
+            if (places >= result.length) {
+                return (TextFunctions.REPT('0', places - result.length) + result).toUpperCase();
+            } else {
+                throw FormulaError.NUM;
+            }
         }
     },
 
     BIN2OCT: (number, places) => {
         number = H.accept(number, Types.NUMBER_NO_BOOLEAN);
-        let defaultPlace = parseInt(number, 2).toString(8).length;
-        places = H.accept(places, Types.NUMBER_NO_BOOLEAN, defaultPlace);
+        places = H.accept(places, Types.NUMBER, null);
 
         let numberStr = number.toString();
         if (numberStr.length > 10) {
@@ -112,20 +116,21 @@ const EngineeringFunctions = {
         if (numberStr.length === 10 && numberStr.substr(0, 1) === "1") {
             return (parseInt(numberStr.substr(1), 2) + 1073741312).toString(8);
         }
-        let result = parseInt(number, 2).toString(8);
-        if (isNaN(places)){
-            throw FormulaError.VALUE;
-        }
-        if (places < 0){
-            return FormulaError.NUM;
-        }
 
-        // truncate places in case it is not integer
-        places = Math.floor(places);
-        if (places >= result.length) {
-            return TextFunctions.REPT(0, places - result.length) + result;
+        let result = parseInt(number, 2).toString(8);
+        if (places == null) {
+            return result.toUpperCase();
         } else {
-            throw FormulaError.NUM;
+            if (places < 0) {
+                throw FormulaError.NUM;
+            }
+            // truncate places in case it is not an integer
+            places = Math.trunc(places);
+            if (places >= result.length) {
+                return (TextFunctions.REPT('0', places - result.length) + result);
+            } else {
+                throw FormulaError.NUM;
+            }
         }
     },
 
@@ -136,7 +141,7 @@ const EngineeringFunctions = {
             throw FormulaError.NUM;
         }
         // check if they are non-integer, if yes, return error
-        if (Math.floor(number1) !== number1 || Math.floor(number2 !== number2)) {
+        if (Math.floor(number1) !== number1 || Math.floor(number2) !== number2) {
             throw FormulaError.NUM;
         }
         if (number1 > 281474976710655 || number2 > 281474976710655) {
@@ -149,15 +154,19 @@ const EngineeringFunctions = {
     BITLSHIFT: (number, shiftAmount) => {
         number = H.accept(number, Types.NUMBER);
         shiftAmount = H.accept(shiftAmount, Types.NUMBER);
-        if (Math.abs(shiftAmount) > 53 || Math.floor(shiftAmount) !== shiftAmount) {
+        shiftAmount = Math.trunc(shiftAmount);
+        if (Math.abs(shiftAmount) > 53) {
             throw FormulaError.NUM;
         }
 
         if (number < 0 || Math.floor(number) !== number || number > 281474976710655) {
             throw FormulaError.NUM;
         }
-
-        return (shiftAmount >= 0) ? number << shiftAmount : number >> -shiftAmount;
+        const result = (shiftAmount >= 0) ? number * 2 ** shiftAmount : Math.trunc(number / 2 ** -shiftAmount);
+        if (result > 281474976710655)
+            throw FormulaError.NUM;
+        else
+            return result;
     },
 
     BITOR: (number1, number2) => {
@@ -180,25 +189,7 @@ const EngineeringFunctions = {
     BITRSHIFT: (number, shiftAmount) => {
         number = H.accept(number, Types.NUMBER);
         shiftAmount = H.accept(shiftAmount, Types.NUMBER);
-        if (Math.abs(shiftAmount) > 53 || Math.floor(shiftAmount) !== shiftAmount) {
-            throw FormulaError.NUM;
-        }
-
-        if (number < 0 || Math.floor(number) !== number || number > 281474976710655) {
-            throw FormulaError.NUM;
-        }
-
-        let result;
-        if (shiftAmount >= 0) {
-            result = number >> shiftAmount;
-        } else {
-            result = number << -shiftAmount;
-        }
-        if (result > 281474976710655) {
-            return FormulaError.NUM;
-        }
-
-        return result;
+        return EngineeringFunctions.BITLSHIFT(number, -shiftAmount);
     },
 
     BITXOR: (number1, number2) => {
@@ -210,10 +201,10 @@ const EngineeringFunctions = {
         if (number2 < 0 || number2 > 281474976710655 || Math.floor(number2) !== number2) {
             throw FormulaError.NUM;
         }
-        // to check if the number is a non-integer
-        if (Math.abs(number1) !== number1 || Math.abs(number2) !== number2) {
-            throw FormulaError.NUM;
-        }
+        // // to check if the number is a non-integer
+        // if (Math.abs(number1) !== number1 || Math.abs(number2) !== number2) {
+        //     throw FormulaError.NUM;
+        // }
 
         return number1 ^ number2;
     },
@@ -222,7 +213,6 @@ const EngineeringFunctions = {
         realNum = H.accept(realNum, Types.NUMBER_NO_BOOLEAN);
         iNum = H.accept(iNum, Types.NUMBER_NO_BOOLEAN);
         suffix = H.accept(suffix, Types.STRING, "i");
-        suffix = (suffix === undefined) ? "i" : suffix;
         if (suffix !== "i" && suffix !== "j") {
             throw FormulaError.VALUE;
         }
@@ -251,10 +241,9 @@ const EngineeringFunctions = {
     },
 
     DEC2BIN: (number, places) => {
-        number = H.accept(number, Types.NUMBER_NO_BOOLEAN);
-        let defaultPlace = parseInt(number, 10).toString(2).length;
-        places = H.accept(places, Types.NUMBER_NO_BOOLEAN, defaultPlace);
-        if (number < -512 || number > 512) {
+        number = H.accept(number, Types.NUMBER);
+        places = H.accept(places, Types.NUMBER, null);
+        if (number < MIN_BIN || number > MAX_BIN) {
             throw FormulaError.NUM;
         }
 
@@ -262,56 +251,76 @@ const EngineeringFunctions = {
         if (number < 0) {
             return "1" + TextFunctions.REPT("0", 9 - (512 + number).toString(2).length) + (512 + number).toString(2);
         }
+
         let result = parseInt(number, 10).toString(2);
-
-        // if places is not an integer, it is truncated
-        places = Math.floor(places);
-        if (places <= 0) {
-            throw FormulaError.NUM;
+        if (places == null) {
+            return result;
+        } else {
+            // if places is not an integer, it is truncated
+            places = Math.trunc(places);
+            if (places <= 0) {
+                throw FormulaError.NUM;
+            }
+            if (places < result.length)
+                throw FormulaError.NUM;
+            return TextFunctions.REPT("0", places - result.length) + result;
         }
-
-        return (places >= result.length) ? TextFunctions.REPT("0", places - result.length) + result : FormulaError.NUM;
     },
 
     DEC2HEX: (number, places) => {
-        number = H.accept(number, Types.NUMBER_NO_BOOLEAN);
-        let defaultPlace = parseInt(number, 10).toString(16).length;
-        places = H.accept(places, Types.NUMBER_NO_BOOLEAN, defaultPlace);
+        number = H.accept(number, Types.NUMBER);
+        places = H.accept(places, Types.NUMBER, null);
         if (number < -549755813888 || number > 549755813888) {
             throw FormulaError.NUM;
         }
+
         // if the number is negative, valid place values are ignored and it returns a 10-character binary number.
         if (number < 0) {
             return (1099511627776 + number).toString(16).toUpperCase();
         }
-        let result = parseInt(number, 10).toString(16).toUpperCase();
-        // if places is not an integer, it is truncated
-        places = Math.floor(places);
-        if (places <= 0) {
-            throw FormulaError.NUM;
+
+        let result = parseInt(number, 10).toString(16);
+
+        if (places == null) {
+            return result.toUpperCase();
+        } else {
+            // if places is not an integer, it is truncated
+            places = Math.trunc(places);
+            if (places <= 0) {
+                throw FormulaError.NUM;
+            }
+            if (places < result.length)
+                throw FormulaError.NUM;
+            return TextFunctions.REPT("0", places - result.length) + result.toUpperCase();
         }
-        return (places >= result.length) ? TextFunctions.REPT(0, places - result.length) + result : FormulaError.NUM;
     },
 
     DEC2OCT: (number, places) => {
-        number = H.accept(number, Types.NUMBER_NO_BOOLEAN);
-        let defaultSpace = parseInt(number, 10).toString(8).length;
-        places = H.accept(places, Types.NUMBER_NO_BOOLEAN, defaultSpace);
+        number = H.accept(number, Types.NUMBER);
+        places = H.accept(places, Types.NUMBER, null);
         if (number < -536870912 || number > 536870912) {
             throw FormulaError.NUM;
         }
+
         // if the number is negative, valid place values are ignored and it returns a 10-character binary number.
         if (number < 0) {
             return (number + 1073741824).toString(8);
         }
-        let result = parseInt(number, 10).toString(8);
-        // if places is not an integer, it is truncated
-        places = Math.floor(places);
-        if (places <= 0) {
-            throw FormulaError.NUM;
-        }
 
-        return (places >= result.length) ? TextFunctions.REPT('0', places - result.length) + result : FormulaError.NUM;
+        let result = parseInt(number, 10).toString(8);
+
+        if (places == null) {
+            return result.toUpperCase();
+        } else {
+            // if places is not an integer, it is truncated
+            places = Math.trunc(places);
+            if (places <= 0) {
+                throw FormulaError.NUM;
+            }
+            if (places < result.length)
+                throw FormulaError.NUM;
+            return TextFunctions.REPT("0", places - result.length) + result;
+        }
     },
 
     DELTA: (number1, number2) => {
@@ -340,67 +349,49 @@ const EngineeringFunctions = {
 
     HEX2BIN: (number, places) => {
         number = H.accept(number, Types.STRING);
-        if (number === "TRUE" || number === "FALSE"){
-            throw FormulaError.VALUE;
-        }
+        places = H.accept(places, Types.NUMBER, null);
+
         // to check if the number is negative
         let ifNegative = (number.length === 10 && number.substr(0, 1).toLowerCase() === "f");
         // convert HEX to DEC
         let toDecimal = ifNegative ? parseInt(number, 16) - 1099511627776 : parseInt(number, 16);
         // if number is lower than -512 or grater than 511, return error
-        if (toDecimal < -512 || toDecimal > 511) {
+        if (toDecimal < MIN_BIN || toDecimal > MAX_BIN) {
             throw FormulaError.NUM;
         }
         // if the number is negative, valid place values are ignored and it returns a 10-character binary number.
         if (ifNegative) {
             return "1" + TextFunctions.REPT('0', 9 - (toDecimal + 512).toString(2).length) + (toDecimal + 512).toString(2)
         }
-
-        let defaultPlace = toDecimal.toString(2).length;
-        places = H.accept(places, Types.NUMBER_NO_BOOLEAN, defaultPlace);
-
         // convert decimal to binary
         let toBinary = toDecimal.toString(2);
-        // if places is not an integer, it is truncated.
-        places = Math.floor(places);
-        if (places < 0) {
-            throw FormulaError.NUM;
+
+        if (places == null) {
+            return toBinary;
+        } else {
+            // if places is not an integer, it is truncated
+            places = Math.trunc(places);
+            if (places <= 0 || places < toBinary.length) {
+                throw FormulaError.NUM;
+            }
+            return TextFunctions.REPT("0", places - toBinary.length) + toBinary;
         }
-        return (places >= toBinary.length) ? TextFunctions.REPT('0', places - toBinary.length) + toBinary : FormulaError.NUM;
     },
 
     HEX2DEC: (number) => {
         number = H.accept(number, Types.STRING);
-        if (number === "TRUE" || number === "FALSE"){
-            throw FormulaError.NUM;
-        }
         let result = parseInt(number, 16);
         return (result >= 549755813888) ? result - 1099511627776 : result;
     },
 
     HEX2OCT: (number, places) => {
-        number = H.accept(number, Types.NUMBER);
-        places = H.accept(places, Types.NUMBER, false);
-        // if places is not an integer, it is truncated.
-        places = Math.floor(places);
-        if (places < 0) {
-            throw FormulaError.NUM;
-        }
+        number = H.accept(number, Types.STRING);
         // convert HEX to DEC
-        let toDecimal = parseInt(number, 16);
-        if (toDecimal > 536870911 && toDecimal < 1098974756864) {
+        let toDecimal = EngineeringFunctions.HEX2DEC(number);
+        if (toDecimal > MAX_OCT || toDecimal < MIN_OCT) {
             throw FormulaError.NUM;
         }
-        // if the number is negative, valid place values are ignored and it returns a 10-character octal number.
-        if (toDecimal >= 1098974756864) {
-            return (toDecimal - 1098974756864).toString(8);
-        }
-        // convert DEC to OCT
-        let toOctal = toDecimal.toString(8);
-        if (places === undefined) {
-            return toOctal;
-        }
-        return (places >= toOctal.length) ? TextFunctions.REPT('0', places - toOctal.length) + toOctal : FormulaError.NUM;
+        return EngineeringFunctions.DEC2OCT(toDecimal, places);
     },
 
     IMABS: (iNumber) => {
@@ -458,7 +449,7 @@ const EngineeringFunctions = {
         let imaginary = EngineeringFunctions.IMAGINARY(iNumber);
         // x + yi => x cannot be 0, since theta = tan-1(y / x)
         if (real === 0 && imaginary === 0) {
-            throw FormulaError.NUM;
+            throw FormulaError.DIV0;
         }
         // return PI/2 if x is equal to 0 and y is positive
         if (real === 0 && imaginary > 0) {
@@ -470,7 +461,7 @@ const EngineeringFunctions = {
         }
         // return -PI if x is negative and y is equal to 0
         if (real < 0 && imaginary === 0) {
-            return -Math.PI
+            return Math.PI
         }
         // return 0 if x is positive and y is equal to 0
         if (real > 0 && imaginary === 0) {
@@ -500,6 +491,9 @@ const EngineeringFunctions = {
 
     IMCOS: (iNumber) => {
         iNumber = H.accept(iNumber, Types.STRING);
+        if (iNumber === 'TRUE' || iNumber === 'FALSE') {
+            throw FormulaError.NUM;
+        }
         let real = EngineeringFunctions.IMREAL(iNumber);
         let imaginary = EngineeringFunctions.IMAGINARY(iNumber);
         // look up unit
@@ -513,31 +507,34 @@ const EngineeringFunctions = {
 
     IMCOSH: (iNumber) => {
         iNumber = H.accept(iNumber, Types.STRING);
+        if (iNumber === 'TRUE' || iNumber === 'FALSE') {
+            throw FormulaError.NUM;
+        }
         let real = EngineeringFunctions.IMREAL(iNumber);
         let imaginary = EngineeringFunctions.IMAGINARY(iNumber);
         // look up unit
         let unit = iNumber.substring(iNumber.length - 1, iNumber.length);
         unit = (unit === 'i' || unit === 'j') ? unit : 'i';
 
-        let realInput = Math.cos(real) * (Math.exp(imaginary) + Math.exp(-imaginary)) / 2;
-        let imaginaryInput = -Math.sin(real) * (Math.exp(imaginary) - Math.exp(-imaginary)) / 2;
-        return EngineeringFunctions.COMPLEX(realInput, imaginaryInput, unit);
+        let realInput = Math.cos(imaginary) * (Math.exp(real) + Math.exp(-real)) / 2;
+        let imaginaryInput = -Math.sin(imaginary) * (Math.exp(real) - Math.exp(-real)) / 2;
+        return EngineeringFunctions.COMPLEX(realInput, -imaginaryInput, unit);
     },
 
     IMCOT: (iNumber) => {
         iNumber = H.accept(iNumber, Types.STRING);
-        if (iNumber === true || iNumber === false) {
-            throw FormulaError.VALUE;
+        if (iNumber === 'TRUE' || iNumber === 'FALSE') {
+            throw FormulaError.NUM;
         }
-        let real = EngineeringFunctions.IMCOS(EngineeringFunctions.IMREAL(iNumber));
-        let imaginary = EngineeringFunctions.IMSIN(EngineeringFunctions.IMAGINARY(iNumber));
+        let real = EngineeringFunctions.IMCOS(iNumber);
+        let imaginary = EngineeringFunctions.IMSIN(iNumber);
         return EngineeringFunctions.IMDIV(real, imaginary);
     },
 
     IMCSC: (iNumber) => {
         iNumber = H.accept(iNumber, Types.STRING);
-        if (iNumber === true || iNumber === false) {
-            throw FormulaError.VALUE;
+        if (iNumber === 'TRUE' || iNumber === 'FALSE') {
+            throw FormulaError.NUM;
         }
 
         return EngineeringFunctions.IMDIV('1', EngineeringFunctions.IMSIN(iNumber));
@@ -545,8 +542,8 @@ const EngineeringFunctions = {
 
     IMCSCH: (iNumber) => {
         iNumber = H.accept(iNumber, Types.STRING);
-        if (iNumber === true || iNumber === false) {
-            throw FormulaError.VALUE;
+        if (iNumber === 'TRUE' || iNumber === 'FALSE') {
+            throw FormulaError.NUM;
         }
 
         return EngineeringFunctions.IMDIV('1', EngineeringFunctions.IMSINH(iNumber));
@@ -555,6 +552,9 @@ const EngineeringFunctions = {
     IMDIV: (iNumber1, iNumber2) => {
         iNumber1 = H.accept(iNumber1, Types.STRING);  // a + bi
         iNumber2 = H.accept(iNumber2, Types.STRING);  // c + di
+        if (iNumber1 === "TRUE" || iNumber1 === "FALSE" || iNumber2 === "TRUE" || iNumber2 === "FALSE") {
+            throw FormulaError.NUM;
+        }
         let a = EngineeringFunctions.IMREAL(iNumber1);
         let b = EngineeringFunctions.IMAGINARY(iNumber1);
         let c = EngineeringFunctions.IMREAL(iNumber2);
@@ -575,8 +575,8 @@ const EngineeringFunctions = {
 
     IMEXP: (iNumber) => {
         iNumber = H.accept(iNumber, Types.STRING);
-        if (iNumber === true || iNumber === false) {
-            throw FormulaError.VALUE;
+        if (iNumber === 'TRUE' || iNumber === 'FALSE') {
+            throw FormulaError.NUM;
         }
 
         let real = EngineeringFunctions.IMREAL(iNumber);
@@ -591,6 +591,9 @@ const EngineeringFunctions = {
 
     IMLN: (iNumber) => {
         iNumber = H.accept(iNumber, Types.STRING);
+        if (iNumber === 'TRUE' || iNumber === 'FALSE') {
+            throw FormulaError.NUM;
+        }
         let real = EngineeringFunctions.IMREAL(iNumber);
         let imaginary = EngineeringFunctions.IMAGINARY(iNumber);
 
@@ -602,6 +605,9 @@ const EngineeringFunctions = {
 
     IMLOG10: (iNumber) => {
         iNumber = H.accept(iNumber, Types.STRING);
+        if (iNumber === 'TRUE' || iNumber === 'FALSE') {
+            throw FormulaError.NUM;
+        }
         let real = EngineeringFunctions.IMREAL(iNumber);
         let imaginary = EngineeringFunctions.IMAGINARY(iNumber);
         // look up imaginary unit
@@ -614,6 +620,9 @@ const EngineeringFunctions = {
 
     IMLOG2: (iNumber) => {
         iNumber = H.accept(iNumber, Types.STRING);
+        if (iNumber === 'TRUE' || iNumber === 'FALSE') {
+            throw FormulaError.NUM;
+        }
         let real = EngineeringFunctions.IMREAL(iNumber);
         let imaginary = EngineeringFunctions.IMAGINARY(iNumber);
         // look up imaginary unit
@@ -626,7 +635,10 @@ const EngineeringFunctions = {
 
     IMPOWER: (iNumber, number) => {
         iNumber = H.accept(iNumber, Types.STRING);
-        number = H.accept(number, Types.NUMBER);
+        if (iNumber === 'TRUE' || iNumber === 'FALSE') {
+            throw FormulaError.NUM;
+        }
+        number = H.accept(number, Types.NUMBER_NO_BOOLEAN);
 
         // look up imaginary unit
         let unit = iNumber.substring(iNumber.length - 1, iNumber.length);
@@ -650,8 +662,8 @@ const EngineeringFunctions = {
         for (let i = 1; i < params.length; i++) {
             let a = EngineeringFunctions.IMREAL(result);
             let b = EngineeringFunctions.IMAGINARY(result);
-            let c = EngineeringFunctions.IMREAL(result[i]);
-            let d = EngineeringFunctions.IMAGINARY(result[i]);
+            let c = EngineeringFunctions.IMREAL(params[i]);
+            let d = EngineeringFunctions.IMAGINARY(params[i]);
             result = EngineeringFunctions.COMPLEX(a * c - b * d, a * d + b * c);
         }
         return result;
@@ -699,22 +711,25 @@ const EngineeringFunctions = {
 
     IMSEC: (iNumber) => {
         iNumber = H.accept(iNumber, Types.STRING);
-        if (iNumber === true || iNumber === false) {
-            throw FormulaError.VALUE;
+        if (iNumber === 'TRUE' || iNumber === 'FALSE') {
+            throw FormulaError.NUM;
         }
         return EngineeringFunctions.IMDIV('1', EngineeringFunctions.IMCOS(iNumber));
     },
 
     IMSECH: (iNumber) => {
         iNumber = H.accept(iNumber, Types.STRING);
-        if (iNumber === true || iNumber === false) {
-            throw FormulaError.VALUE;
+        if (iNumber === 'TRUE' || iNumber === 'FALSE') {
+            throw FormulaError.NUM;
         }
         return EngineeringFunctions.IMDIV('1', EngineeringFunctions.IMCOSH(iNumber));
     },
 
     IMSIN: (iNumber) => {
         iNumber = H.accept(iNumber, Types.STRING);
+        if (iNumber === 'TRUE' || iNumber === 'FALSE') {
+            throw FormulaError.NUM;
+        }
         let real = EngineeringFunctions.IMREAL(iNumber);
         let imaginary = EngineeringFunctions.IMAGINARY(iNumber);
         // look up unit
@@ -728,6 +743,9 @@ const EngineeringFunctions = {
 
     IMSINH: (iNumber) => {
         iNumber = H.accept(iNumber, Types.STRING);
+        if (iNumber === 'TRUE' || iNumber === 'FALSE') {
+            throw FormulaError.NUM;
+        }
         let real = EngineeringFunctions.IMREAL(iNumber);
         let imaginary = EngineeringFunctions.IMAGINARY(iNumber);
 
@@ -741,6 +759,9 @@ const EngineeringFunctions = {
 
     IMSQRT: (iNumber) => {
         iNumber = H.accept(iNumber, Types.STRING);
+        if (iNumber === 'TRUE' || iNumber === 'FALSE') {
+            throw FormulaError.NUM;
+        }
         // look up unit
         let unit = iNumber.substring(iNumber.length - 1, iNumber.length);
         unit = (unit === 'i' || unit === 'j') ? unit : 'i';
@@ -754,17 +775,19 @@ const EngineeringFunctions = {
     IMSUB: (iNumber1, iNumber2) => {
         iNumber1 = H.accept(iNumber1, Types.STRING);
         iNumber2 = H.accept(iNumber2, Types.STRING);
+        if (iNumber1 === 'TRUE' || iNumber1 === 'FALSE' || iNumber1 === 'TRUE' || iNumber1 === 'FALSE') {
+            throw FormulaError.NUM;
+        }
         let a = EngineeringFunctions.IMREAL(iNumber1);
         let b = EngineeringFunctions.IMAGINARY(iNumber1);
         let c = EngineeringFunctions.IMREAL(iNumber2);
         let d = EngineeringFunctions.IMAGINARY(iNumber2);
         let unit1 = iNumber1.substring(iNumber1.length - 1, iNumber1.length);
         let unit2 = iNumber2.substring(iNumber2.length - 1, iNumber2.length);
-        let unit = 'i';
-        if (unit1 === 'j' || unit2 === 'i') {
-            unit = 'j'
+        if (unit1 !== unit2){
+            throw FormulaError.NUM;
         }
-        return EngineeringFunctions.COMPLEX(a - c, b - d, unit);
+        return EngineeringFunctions.COMPLEX(a - c, b - d, unit1);
     },
 
     IMSUM: (...params) => {
@@ -807,7 +830,7 @@ const EngineeringFunctions = {
         let isNegative = (number.length === 10 && number.substring(0, 1) === '7');
         // convert OCT to DEC
         let toDecimal = isNegative ? parseInt(number, 8) - 1073741824 : parseInt(number, 8);
-        if (toDecimal < -512 || toDecimal > 512) {
+        if (toDecimal < MIN_BIN || toDecimal > MAX_BIN) {
             return FormulaError.NUM;
         }
 

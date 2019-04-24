@@ -34,7 +34,7 @@ const parser = new FormulaParser({
     }
 });
 
-describe('Engineering Functions', function () {
+describe('Date and Time Functions', function () {
     const funs = Object.keys(TestCase);
 
     funs.forEach(fun => {
@@ -45,7 +45,7 @@ describe('Engineering Functions', function () {
                 let result = parser.parse(formula, {row: 1, col: 1});
                 if (result.result) result = result.result;
                 if (typeof result === "number" && typeof expected === "number") {
-                    expect(result, `${formula} should equal ${expected}\n`).to.closeTo(expected, 0.0000001);
+                    expect(result, `${formula} should equal ${expected}\n`).to.closeTo(expected, 0.00000001);
                 } else {
                     expect(result, `${formula} should equal ${expected}\n`).to.equal(expected);
                 }

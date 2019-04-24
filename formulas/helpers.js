@@ -115,20 +115,20 @@ class FormulaHelpers {
     /**
      * Flatten parameters to 1D array.
      * @see {@link FormulaHelpers.accept}
-     * @param {Array} params
-     * @param {Types|null} valueType
-     * @param {boolean} allowUnion
+     * @param {Array} params - Parameter that needs to flatten.
+     * @param {Types|null} valueType - The type each item should be,
+     *                          ull if allows any type.
+     * @param {boolean} allowUnion - Allow union, e.g. (A1:C1, E4:F3)
      * @param {function} hook - Invoked after parsing each item.
      *                         of the array.
-     * @param {*} [defValue] - The value if an param is omitted. i.e. SUM(1,2,,,,,)
-     * @param {number} [minSize]
-     * @return {Array}
+     * @param {*} [defValue=null] - The value if an param is omitted. i.e. SUM(1,2,,,,,)
+     * @param {number} [minSize=1] - The minimum size of the parameters
      */
     flattenParams(params, valueType, allowUnion, hook, defValue = null, minSize = 1) {
         if (params.length < minSize)
             throw FormulaError.ARG_MISSING([valueType]);
         if (defValue == null) {
-            defValue = valueType === Types.NUMBER ? 0 : valueType == null ? undefined : '';
+            defValue = valueType === Types.NUMBER ? 0 : valueType == null ? null : '';
         }
         params.forEach(param => {
             const {isCellRef, isRangeRef, isArray} = param;
@@ -177,8 +177,9 @@ class FormulaHelpers {
      *           COLLECTIONS: Expect an Array of the above types
      *           null: Do not parse the value, return it directly.
      *              e.g. [NUMBER, ARRAY, STRING]. The collection is not a flatted array.
-     * @param {*} defValue - Default value if the param is not given.
-     *               if null, this param is required, a Error will throw if not given.
+     * @param {*} [defValue] - Default value if the param is not given.
+     *               if undefined, this param is required, a Error will throw if not given.
+     *               if null, and param is undefined, null will be returned.
      * @param {boolean} [flat=true] - If the array should be flattened,
      *                      only applicable when type is ARRAY.
      *                      If false, collection is disallowed.

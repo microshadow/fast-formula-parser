@@ -4,7 +4,8 @@
   "description": "fast excel formula parser",
   "main": "index.js",
   "scripts": {
-    "test": "mocha",
+    "test": "nyc mocha",
+    "test:f": "nyc -n \"formulas/functions/**\" -n \"formulas/operators.js\" --reporter=html --reporter=text mocha test/formulas",
     "build": "webpack"
   },
   "author": "Lester(Dishu) Lyu",
@@ -12,15 +13,17 @@
   "dependencies": {
     "bahttext": "^1.1.0",
     "bessel": "^1.0.2",
-    "chevrotain": "^4.3.2",
-    "jStat": "^1.7.1"
+    "chevrotain": "^4.3.3",
+    "jstat": "^1.7.1"
   },
   "devDependencies": {
     "chai": "^4.2.0",
-    "mocha": "^6.0.2",
+    "mocha": "^6.1.4",
+    "nyc": "^14.0.0",
     "terser-webpack-plugin": "^1.2.3",
-    "webpack": "^4.29.6",
+    "webpack": "^4.30.0",
+    "webpack-bundle-analyzer": "^3.3.2",
     "webpack-cli": "^3.3.0",
-    "xlsx-populate": "^1.19.1"
+    "xlsx-populate": "git+https://github.com/LesterLyu/xlsx-populate.git#formula-support"
   }
 }
