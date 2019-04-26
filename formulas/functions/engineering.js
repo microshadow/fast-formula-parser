@@ -12,6 +12,37 @@ const MAX_OCT = 536870911, // OCT2DEC(3777777777)
     MAX_BIN = 511, // BIN2DEC(111111111)
     MIN_BIN = -512; // BIN2DEC(1000000000)
 
+const numberRegex = /^\s?[+-]?\s?[0-9]+[.]?[0-9]*([eE][+\-][0-9]+)?\s?$/;
+const IMWithoutRealRegex = /^\s?([+-]?\s?([0-9]+[.]?[0-9]*([eE][+\-][0-9]+)?)?)\s?[ij]\s?$/;
+const IMRegex = /^\s?([+-]?\s?[0-9]+[.]?[0-9]*([eE][+\-][0-9]+)?)\s?([+-]?\s?([0-9]+[.]?[0-9]*([eE][+\-][0-9]+)?)?)\s?[ij]\s?$/;
+
+function parseIM(textOrNumber) {
+    textOrNumber = H.accept(textOrNumber);
+    let real = 0, im = 0, unit = 'i';
+    if (typeof textOrNumber === "number")
+        return {real: textOrNumber, im, unit};
+    if (typeof textOrNumber === "boolean")
+        throw FormulaError.VALUE;
+    let match = textOrNumber.match(numberRegex);
+    if (match) {
+        real = Number(match[0]);
+        return {real, im, unit};
+    }
+    match = textOrNumber.match(IMWithoutRealRegex);
+    if (match) {
+        im = Number(/^\s?[+-]?\s?$/.test(match[1]) ? match[1] + '1' : match[1]);
+        unit = match[0].slice(-1);
+        return {real, im, unit};
+    }
+    match = textOrNumber.match(IMRegex);
+    if (match) {
+        real = Number(match[1]);
+        im = Number(/^\s?[+-]?\s?$/.test(match[3]) ? match[3] + '1' : match[3]);
+        unit = match[0].slice(-1);
+        return {real, im, unit};
+    }
+    throw FormulaError.NUM;
+}
 
 const EngineeringFunctions = {
     BESSELI: (x, n) => {
@@ -395,254 +426,131 @@ const EngineeringFunctions = {
     },
 
     IMABS: (iNumber) => {
-        iNumber = H.accept(iNumber, Types.STRING);
-        let real = EngineeringFunctions.IMREAL(iNumber);
-        let imaginary = EngineeringFunctions.IMAGINARY(iNumber);
-        return Math.sqrt(Math.pow(real, 2) + Math.pow(imaginary, 2));
+        const {real, im} = parseIM(iNumber);
+        return Math.sqrt(Math.pow(real, 2) + Math.pow(im, 2));
     },
 
     IMAGINARY: (iNumber) => {
-        iNumber = H.accept(iNumber, Types.STRING);
-        if (iNumber === 0 || iNumber === '0') {
-            return 0;
-        }
-        if (['i', 'j'].indexOf(iNumber) >= 0) {
-            return 1;
-        }
-        // normalize imaginary coefficient
-        iNumber = iNumber.replace('+i', '+1i').replace('-i', '-1i').replace('+j', '+1j').replace('-j', '-1j');
-        // look up sign
-        let plusSign = iNumber.indexOf('+');
-        let minusSign = iNumber.indexOf('-');
-        if (plusSign === 0) {
-            plusSign = iNumber.indexOf('+', 1)
-        }
-        if (minusSign === 0) {
-            minusSign = iNumber.indexOf('-', 1);
-        }
-        // look up imaginary unit
-        let unit = iNumber.substring(iNumber.length - 1, iNumber.length);
-        let validUnit = (unit === 'i' || unit === 'j');
-
-        if (plusSign >= 0 || minusSign >= 0) {
-            if (!validUnit) {
-                throw FormulaError.NUM
-            }
-
-            if (plusSign >= 0) {
-                return Number(iNumber.substring(plusSign + 1, iNumber.length - 1));
-            } else {
-                return -Number(iNumber.substring(minusSign + 1, iNumber.length - 1));
-            }
-        } else {
-            if (validUnit) {
-                return Number(iNumber.substring(0, iNumber.length - 1));
-            } else {
-                return 0;
-            }
-        }
+        return parseIM(iNumber).im;
     },
 
     IMARGUMENT: (iNumber) => {
-        iNumber = H.accept(iNumber, Types.STRING);
-        let real = EngineeringFunctions.IMREAL(iNumber);
-        let imaginary = EngineeringFunctions.IMAGINARY(iNumber);
+        const {real, im} = parseIM(iNumber);
         // x + yi => x cannot be 0, since theta = tan-1(y / x)
-        if (real === 0 && imaginary === 0) {
+        if (real === 0 && im === 0) {
             throw FormulaError.DIV0;
         }
         // return PI/2 if x is equal to 0 and y is positive
-        if (real === 0 && imaginary > 0) {
+        if (real === 0 && im > 0) {
             return Math.PI / 2;
         }
         // while return -PI/2 if x is equal to 0 and y is negative
-        if (real === 0 && imaginary < 0) {
+        if (real === 0 && im < 0) {
             return -Math.PI / 2;
         }
         // return -PI if x is negative and y is equal to 0
-        if (real < 0 && imaginary === 0) {
+        if (real < 0 && im === 0) {
             return Math.PI
         }
         // return 0 if x is positive and y is equal to 0
-        if (real > 0 && imaginary === 0) {
+        if (real > 0 && im === 0) {
             return 0;
         }
         // return argument of iNumber
         if (real > 0) {
-            return Math.atan(imaginary / real);
-        } else if (real < 0 && imaginary > 0) {
-            return Math.atan(imaginary / real) + Math.PI;
+            return Math.atan(im / real);
+        } else if (real < 0 && im > 0) {
+            return Math.atan(im / real) + Math.PI;
         } else {
-            return Math.atan(imaginary / real) - Math.PI;
+            return Math.atan(im / real) - Math.PI;
         }
 
     },
 
     IMCONJUGATE: (iNumber) => {
-        iNumber = H.accept(iNumber, Types.STRING);
-        let real = EngineeringFunctions.IMREAL(iNumber);
-        let imaginary = EngineeringFunctions.IMAGINARY(iNumber);
-        // look up unit
-        let unit = iNumber.substring(iNumber.length - 1, iNumber.length);
-        unit = (unit === 'i' || unit === 'j') ? unit : 'i';
-        console.log(imaginary);
-        return (imaginary !== 0) ? EngineeringFunctions.COMPLEX(real, -imaginary, unit) : iNumber;
+        const {real, im, unit} = parseIM(iNumber);
+        return (im !== 0) ? EngineeringFunctions.COMPLEX(real, -im, unit) : '' + real;
     },
 
     IMCOS: (iNumber) => {
-        iNumber = H.accept(iNumber, Types.STRING);
-        if (iNumber === 'TRUE' || iNumber === 'FALSE') {
-            throw FormulaError.NUM;
-        }
-        let real = EngineeringFunctions.IMREAL(iNumber);
-        let imaginary = EngineeringFunctions.IMAGINARY(iNumber);
-        // look up unit
-        let unit = iNumber.substring(iNumber.length - 1, iNumber.length);
-        unit = (unit === 'i' || unit === 'j') ? unit : 'i';
-        let realInput = Math.cos(real) * (Math.exp(imaginary) + Math.exp(-imaginary)) / 2;
-        let imaginaryInput = -Math.sin(real) * (Math.exp(imaginary) - Math.exp(-imaginary)) / 2;
+        const {real, im, unit} = parseIM(iNumber);
+        let realInput = Math.cos(real) * (Math.exp(im) + Math.exp(-im)) / 2;
+        let imaginaryInput = -Math.sin(real) * (Math.exp(im) - Math.exp(-im)) / 2;
 
         return EngineeringFunctions.COMPLEX(realInput, imaginaryInput, unit);
     },
 
     IMCOSH: (iNumber) => {
-        iNumber = H.accept(iNumber, Types.STRING);
-        if (iNumber === 'TRUE' || iNumber === 'FALSE') {
-            throw FormulaError.NUM;
-        }
-        let real = EngineeringFunctions.IMREAL(iNumber);
-        let imaginary = EngineeringFunctions.IMAGINARY(iNumber);
-        // look up unit
-        let unit = iNumber.substring(iNumber.length - 1, iNumber.length);
-        unit = (unit === 'i' || unit === 'j') ? unit : 'i';
-
-        let realInput = Math.cos(imaginary) * (Math.exp(real) + Math.exp(-real)) / 2;
-        let imaginaryInput = -Math.sin(imaginary) * (Math.exp(real) - Math.exp(-real)) / 2;
+        const {real, im, unit} = parseIM(iNumber);
+        let realInput = Math.cos(im) * (Math.exp(real) + Math.exp(-real)) / 2;
+        let imaginaryInput = -Math.sin(im) * (Math.exp(real) - Math.exp(-real)) / 2;
         return EngineeringFunctions.COMPLEX(realInput, -imaginaryInput, unit);
     },
 
     IMCOT: (iNumber) => {
-        iNumber = H.accept(iNumber, Types.STRING);
-        if (iNumber === 'TRUE' || iNumber === 'FALSE') {
-            throw FormulaError.NUM;
-        }
+        iNumber = H.accept(iNumber);
         let real = EngineeringFunctions.IMCOS(iNumber);
         let imaginary = EngineeringFunctions.IMSIN(iNumber);
         return EngineeringFunctions.IMDIV(real, imaginary);
     },
 
     IMCSC: (iNumber) => {
-        iNumber = H.accept(iNumber, Types.STRING);
-        if (iNumber === 'TRUE' || iNumber === 'FALSE') {
-            throw FormulaError.NUM;
-        }
-
+        iNumber = H.accept(iNumber);
         return EngineeringFunctions.IMDIV('1', EngineeringFunctions.IMSIN(iNumber));
     },
 
     IMCSCH: (iNumber) => {
-        iNumber = H.accept(iNumber, Types.STRING);
-        if (iNumber === 'TRUE' || iNumber === 'FALSE') {
-            throw FormulaError.NUM;
-        }
-
+        iNumber = H.accept(iNumber);
         return EngineeringFunctions.IMDIV('1', EngineeringFunctions.IMSINH(iNumber));
     },
 
     IMDIV: (iNumber1, iNumber2) => {
-        iNumber1 = H.accept(iNumber1, Types.STRING);  // a + bi
-        iNumber2 = H.accept(iNumber2, Types.STRING);  // c + di
-        if (iNumber1 === "TRUE" || iNumber1 === "FALSE" || iNumber2 === "TRUE" || iNumber2 === "FALSE") {
+        const res1 = parseIM(iNumber1);
+        const a = res1.real, b = res1.im, unit1 = res1.unit;
+
+        const res2 = parseIM(iNumber2);
+        const c = res2.real, d = res2.im, unit2 = res2.unit;
+
+        if (c === 0 && d === 0 || unit1 !== unit2) {
             throw FormulaError.NUM;
         }
-        let a = EngineeringFunctions.IMREAL(iNumber1);
-        let b = EngineeringFunctions.IMAGINARY(iNumber1);
-        let c = EngineeringFunctions.IMREAL(iNumber2);
-        let d = EngineeringFunctions.IMAGINARY(iNumber2);
-        if (c === 0 && d === 0) {
-            throw FormulaError.NUM;
-        }
-        let unit1 = iNumber1.substring(iNumber1.length - 1, iNumber1.length);
-        let unit2 = iNumber2.substring(iNumber2.length - 1, iNumber2.length);
-        let unit = 'i';
-        if (unit1 === 'j' || unit2 === 'j') {
-            unit = 'j';
-        }
+        let unit = unit1;
 
         let denominator = Math.pow(c, 2) + Math.pow(d, 2);
         return EngineeringFunctions.COMPLEX((a * c + b * d) / denominator, (b * c - a * d) / denominator, unit);
     },
 
     IMEXP: (iNumber) => {
-        iNumber = H.accept(iNumber, Types.STRING);
-        if (iNumber === 'TRUE' || iNumber === 'FALSE') {
-            throw FormulaError.NUM;
-        }
-
-        let real = EngineeringFunctions.IMREAL(iNumber);
-        let imaginary = EngineeringFunctions.IMAGINARY(iNumber);
-        // look up for unit
-        let unit = iNumber.substring(iNumber.length - 1, iNumber.length);
-        unit = (unit === 'i' || unit === 'j') ? unit : 'i';
+        const {real, im, unit} = parseIM(iNumber);
         // return exponential of complex number
         let e = Math.exp(real);
-        return EngineeringFunctions.COMPLEX(e * Math.cos(imaginary), e * Math.sin(imaginary), unit)
+        return EngineeringFunctions.COMPLEX(e * Math.cos(im), e * Math.sin(im), unit)
     },
 
     IMLN: (iNumber) => {
-        iNumber = H.accept(iNumber, Types.STRING);
-        if (iNumber === 'TRUE' || iNumber === 'FALSE') {
-            throw FormulaError.NUM;
-        }
-        let real = EngineeringFunctions.IMREAL(iNumber);
-        let imaginary = EngineeringFunctions.IMAGINARY(iNumber);
-
-        // look up imaginary unit
-        let unit = iNumber.substring(iNumber.length - 1, iNumber.length);
-        unit = (unit === 'i' || unit === 'j') ? unit : 'i';
-        return EngineeringFunctions.COMPLEX(Math.log(Math.sqrt(Math.pow(real, 2) + Math.pow(imaginary, 2))), Math.atan(imaginary / real), unit);
+        const {real, im, unit} = parseIM(iNumber);
+        return EngineeringFunctions.COMPLEX(Math.log(Math.sqrt(Math.pow(real, 2) + Math.pow(im, 2))),
+            Math.atan(im / real), unit);
     },
 
     IMLOG10: (iNumber) => {
-        iNumber = H.accept(iNumber, Types.STRING);
-        if (iNumber === 'TRUE' || iNumber === 'FALSE') {
-            throw FormulaError.NUM;
-        }
-        let real = EngineeringFunctions.IMREAL(iNumber);
-        let imaginary = EngineeringFunctions.IMAGINARY(iNumber);
-        // look up imaginary unit
-        let unit = iNumber.substring(iNumber.length - 1, iNumber.length);
-        unit = (unit === 'i' || unit === 'j') ? unit : 'i';
-        let realInput = Math.log(Math.sqrt(Math.pow(real, 2) + Math.pow(imaginary, 2))) / Math.log(10);
-        let imaginaryInput = Math.atan(imaginary / real) / Math.log(10);
+        const {real, im, unit} = parseIM(iNumber);
+        let realInput = Math.log(Math.sqrt(Math.pow(real, 2) + Math.pow(im, 2))) / Math.log(10);
+        let imaginaryInput = Math.atan(im / real) / Math.log(10);
         return EngineeringFunctions.COMPLEX(realInput, imaginaryInput, unit);
     },
 
     IMLOG2: (iNumber) => {
-        iNumber = H.accept(iNumber, Types.STRING);
-        if (iNumber === 'TRUE' || iNumber === 'FALSE') {
-            throw FormulaError.NUM;
-        }
-        let real = EngineeringFunctions.IMREAL(iNumber);
-        let imaginary = EngineeringFunctions.IMAGINARY(iNumber);
-        // look up imaginary unit
-        let unit = iNumber.substring(iNumber.length - 1, iNumber.length);
-        unit = (unit === 'i' || unit === 'j') ? unit : 'i';
-        let realInput = Math.log(Math.sqrt(Math.pow(real, 2) + Math.pow(imaginary, 2))) / Math.log(2);
-        let imaginaryInput = Math.atan(imaginary / real) / Math.log(2);
+        const {real, im, unit} = parseIM(iNumber);
+        let realInput = Math.log(Math.sqrt(Math.pow(real, 2) + Math.pow(im, 2))) / Math.log(2);
+        let imaginaryInput = Math.atan(im / real) / Math.log(2);
         return EngineeringFunctions.COMPLEX(realInput, imaginaryInput, unit);
     },
 
     IMPOWER: (iNumber, number) => {
-        iNumber = H.accept(iNumber, Types.STRING);
-        if (iNumber === 'TRUE' || iNumber === 'FALSE') {
-            throw FormulaError.NUM;
-        }
+        let {unit} = parseIM(iNumber);
         number = H.accept(number, Types.NUMBER_NO_BOOLEAN);
 
-        // look up imaginary unit
-        let unit = iNumber.substring(iNumber.length - 1, iNumber.length);
-        unit = (unit === 'i' || unit === 'j') ? unit : 'i';
         // calculate power of modules
         let p = Math.pow(EngineeringFunctions.IMABS(iNumber), number);
         // calculate argument
@@ -654,117 +562,55 @@ const EngineeringFunctions = {
     },
 
     IMPRODUCT: (...params) => {
-        let result = params[0];
-        if (!params.length) {
-            throw FormulaError.VALUE;
-        }
-        // loop on all numbers
-        for (let i = 1; i < params.length; i++) {
-            let a = EngineeringFunctions.IMREAL(result);
-            let b = EngineeringFunctions.IMAGINARY(result);
-            let c = EngineeringFunctions.IMREAL(params[i]);
-            let d = EngineeringFunctions.IMAGINARY(params[i]);
-            result = EngineeringFunctions.COMPLEX(a * c - b * d, a * d + b * c);
-        }
+        let result;
+        let i = 0;
+        H.flattenParams(params, null, false, (item) => {
+            if (i === 0) {
+                result = H.accept(item);
+                parseIM(result);
+            } else {
+                const res1 = parseIM(result);
+                const a = res1.real, b = res1.im, unit1 = res1.unit;
+                const res2 = parseIM(item);
+                const c = res2.real, d = res2.im, unit2 = res2.unit;
+                if (unit1 !== unit2)
+                    throw FormulaError.VALUE;
+                result = EngineeringFunctions.COMPLEX(a * c - b * d, a * d + b * c);
+            }
+            i++;
+        }, 1);
         return result;
     },
 
     IMREAL: (iNumber) => {
-        iNumber = H.accept(iNumber, Types.STRING);
-        if (iNumber === 0 || iNumber === '0') {
-            return 0;
-        }
-        // handle special cases
-        if (['i', '+i', '1i', '+1i', '-i', '-1i', 'j', '+j', '1j', '+1j', '-j', '-1j'].indexOf(iNumber) >= 0) {
-            return 0;
-        }
-        // look up sign
-        let plusSign = iNumber.indexOf('+');
-        let minusSign = iNumber.indexOf('-');
-        if (plusSign === 0) {
-            plusSign = iNumber.indexOf('+', 1);
-        }
-        if (minusSign === 0) {
-            minusSign = iNumber.indexOf('-', 1);
-        }
-        // look up unit
-        let unit = iNumber.substring(iNumber.length - 1, iNumber.length);
-        let validUnit = (unit === 'i' || unit === 'j');
-
-        if (plusSign >= 0 || minusSign >= 0) {
-            if (!validUnit) {
-                return FormulaError.NUM;
-            }
-            if (plusSign >= 0) {
-                return Number(iNumber.substring(0, plusSign));
-            } else {
-                return Number(iNumber.substring(0, minusSign));
-            }
-        } else {
-            if (validUnit) {
-                return 0;
-            } else {
-                return Number(iNumber);   // should use Number instead if parseInt
-            }
-        }
+        return parseIM(iNumber).real;
     },
 
     IMSEC: (iNumber) => {
-        iNumber = H.accept(iNumber, Types.STRING);
-        if (iNumber === 'TRUE' || iNumber === 'FALSE') {
-            throw FormulaError.NUM;
-        }
         return EngineeringFunctions.IMDIV('1', EngineeringFunctions.IMCOS(iNumber));
     },
 
     IMSECH: (iNumber) => {
-        iNumber = H.accept(iNumber, Types.STRING);
-        if (iNumber === 'TRUE' || iNumber === 'FALSE') {
-            throw FormulaError.NUM;
-        }
         return EngineeringFunctions.IMDIV('1', EngineeringFunctions.IMCOSH(iNumber));
     },
 
     IMSIN: (iNumber) => {
-        iNumber = H.accept(iNumber, Types.STRING);
-        if (iNumber === 'TRUE' || iNumber === 'FALSE') {
-            throw FormulaError.NUM;
-        }
-        let real = EngineeringFunctions.IMREAL(iNumber);
-        let imaginary = EngineeringFunctions.IMAGINARY(iNumber);
-        // look up unit
-        let unit = iNumber.substring(iNumber.length - 1, iNumber.length);
-        unit = (unit === 'i' || unit === 'j') ? unit : 'i';
+        const {real, im, unit} = parseIM(iNumber);
 
-        let realInput = Math.sin(real) * (Math.exp(imaginary) + Math.exp(-imaginary)) / 2;
-        let imaginaryInput = Math.cos(real) * (Math.exp(imaginary) - Math.exp(-imaginary)) / 2;
+        let realInput = Math.sin(real) * (Math.exp(im) + Math.exp(-im)) / 2;
+        let imaginaryInput = Math.cos(real) * (Math.exp(im) - Math.exp(-im)) / 2;
         return EngineeringFunctions.COMPLEX(realInput, imaginaryInput, unit);
     },
 
     IMSINH: (iNumber) => {
-        iNumber = H.accept(iNumber, Types.STRING);
-        if (iNumber === 'TRUE' || iNumber === 'FALSE') {
-            throw FormulaError.NUM;
-        }
-        let real = EngineeringFunctions.IMREAL(iNumber);
-        let imaginary = EngineeringFunctions.IMAGINARY(iNumber);
-
-        // look up unit
-        let unit = iNumber.substring(iNumber.length - 1, iNumber.length);
-        unit = (unit === 'i' || unit === 'j') ? unit : 'i';
-        let realInput = Math.cos(imaginary) * (Math.exp(real) - Math.exp(-real)) / 2;
-        let imaginaryInput = Math.sin(imaginary) * (Math.exp(real) + Math.exp(-real)) / 2;
+        const {real, im, unit} = parseIM(iNumber);
+        let realInput = Math.cos(im) * (Math.exp(real) - Math.exp(-real)) / 2;
+        let imaginaryInput = Math.sin(im) * (Math.exp(real) + Math.exp(-real)) / 2;
         return EngineeringFunctions.COMPLEX(realInput, imaginaryInput, unit);
     },
 
     IMSQRT: (iNumber) => {
-        iNumber = H.accept(iNumber, Types.STRING);
-        if (iNumber === 'TRUE' || iNumber === 'FALSE') {
-            throw FormulaError.NUM;
-        }
-        // look up unit
-        let unit = iNumber.substring(iNumber.length - 1, iNumber.length);
-        unit = (unit === 'i' || unit === 'j') ? unit : 'i';
+        const {unit} = parseIM(iNumber);
         // calculate the power of modulus
         let power = Math.sqrt(EngineeringFunctions.IMABS(iNumber));
         // calculate argument
@@ -773,47 +619,32 @@ const EngineeringFunctions = {
     },
 
     IMSUB: (iNumber1, iNumber2) => {
-        iNumber1 = H.accept(iNumber1, Types.STRING);
-        iNumber2 = H.accept(iNumber2, Types.STRING);
-        if (iNumber1 === 'TRUE' || iNumber1 === 'FALSE' || iNumber1 === 'TRUE' || iNumber1 === 'FALSE') {
-            throw FormulaError.NUM;
-        }
-        let a = EngineeringFunctions.IMREAL(iNumber1);
-        let b = EngineeringFunctions.IMAGINARY(iNumber1);
-        let c = EngineeringFunctions.IMREAL(iNumber2);
-        let d = EngineeringFunctions.IMAGINARY(iNumber2);
-        let unit1 = iNumber1.substring(iNumber1.length - 1, iNumber1.length);
-        let unit2 = iNumber2.substring(iNumber2.length - 1, iNumber2.length);
-        if (unit1 !== unit2){
-            throw FormulaError.NUM;
+        const res1 = parseIM(iNumber1);
+        const a = res1.real, b = res1.im, unit1 = res1.unit;
+        const res2 = parseIM(iNumber2);
+        const c = res2.real, d = res2.im, unit2 = res2.unit;
+
+        if (unit1 !== unit2) {
+            throw FormulaError.VALUE;
         }
         return EngineeringFunctions.COMPLEX(a - c, b - d, unit1);
     },
 
     IMSUM: (...params) => {
-        if (!params.length) {
-            throw FormulaError.VALUE;
-        }
-        let iNumber = params[0];
-        let a = EngineeringFunctions.IMREAL(iNumber);
-        let b = EngineeringFunctions.IMAGINARY(iNumber);
-        for (let i = 0; i < params.length; i++) {
-            let c = EngineeringFunctions.IMREAL(params[i]);
-            let d = EngineeringFunctions.IMAGINARY(params[i]);
-            iNumber = EngineeringFunctions.COMPLEX(a + c, b + d);
-        }
-        return iNumber;
+        let realSum = 0, imSum = 0, prevUnit;
+        H.flattenParams(params, null, false, (item) => {
+            const {real, im, unit} = parseIM(item);
+            if (!prevUnit) prevUnit = unit;
+            if (prevUnit !== unit)
+                throw FormulaError.VALUE;
+            realSum += real;
+            imSum += im;
+        });
+        return EngineeringFunctions.COMPLEX(realSum, imSum, prevUnit);
     },
 
     IMTAN: (iNumber) => {
-        iNumber = H.accept(iNumber, Types.STRING);
-        if (iNumber === "TRUE" || iNumber === "FALSE") {
-            throw FormulaError.VALUE;
-        }
-        let unit = iNumber.substring(iNumber.length - 1, iNumber.length);
-        if (unit !== 'i' && unit !== 'j'){
-            throw FormulaError.NUM;
-        }
+        const {unit} = parseIM(iNumber);
         return EngineeringFunctions.IMDIV(EngineeringFunctions.IMSIN(iNumber), EngineeringFunctions.IMCOS(iNumber), unit);
     },
 
@@ -821,7 +652,7 @@ const EngineeringFunctions = {
         number = H.accept(number, Types.STRING);
         places = H.accept(places, Types.NUMBER, null);
         // if places is not an integer, it is truncated
-        places = Math.floor(places);
+        places = Math.trunc(places);
         if (places < 0) {
             throw FormulaError.NUM;
         }
@@ -862,7 +693,6 @@ const EngineeringFunctions = {
         if (number.length > 10) {
             throw FormulaError.NUM
         }
-
         // convert OCT to DEC
         let toDecimal = EngineeringFunctions.OCT2DEC(number);
 
@@ -872,7 +702,7 @@ const EngineeringFunctions = {
         }
 
         // convert DEC to HEX
-        let toHex = EngineeringFunctions.DEC2HEX(toDecimal,places);
+        let toHex = EngineeringFunctions.DEC2HEX(toDecimal, places);
 
         if (places === null) {
             return toHex;
@@ -880,14 +710,14 @@ const EngineeringFunctions = {
             // if places is not an integer, it is truncated
             places = Math.trunc(places);
 
-            if (isNaN(places)){
+            if (isNaN(places)) {
                 throw FormulaError.VALUE;
             }
             if (places < 0) {
                 throw FormulaError.NUM;
             }
 
-            if (places < toHex.length){
+            if (places < toHex.length) {
                 throw FormulaError.NUM;
             } else {
                 return TextFunctions.REPT('0', places - toHex.length) + toHex;
