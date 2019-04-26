@@ -807,17 +807,19 @@ const EngineeringFunctions = {
 
     IMTAN: (iNumber) => {
         iNumber = H.accept(iNumber, Types.STRING);
-        if (iNumber === true || iNumber === false) {
+        if (iNumber === "TRUE" || iNumber === "FALSE") {
             throw FormulaError.VALUE;
         }
         let unit = iNumber.substring(iNumber.length - 1, iNumber.length);
-        unit = (unit === 'i' || unit === 'j') ? unit : 'i';
-        return EngineeringFunctions.COMPLEX(EngineeringFunctions.IMSIN(iNumber), EngineeringFunctions.IMCOS(iNumber), unit);
+        if (unit !== 'i' && unit !== 'j'){
+            throw FormulaError.NUM;
+        }
+        return EngineeringFunctions.IMDIV(EngineeringFunctions.IMSIN(iNumber), EngineeringFunctions.IMCOS(iNumber), unit);
     },
 
     OCT2BIN: (number, places) => {
         number = H.accept(number, Types.STRING);
-        places = H.accept(places, Types.NUMBER, false);
+        places = H.accept(places, Types.NUMBER, null);
         // if places is not an integer, it is truncated
         places = Math.floor(places);
         if (places < 0) {
@@ -840,7 +842,7 @@ const EngineeringFunctions = {
         }
         // convert DEC to BIN
         let result = toDecimal.toString(2);
-        if (typeof places === 'undefined') {
+        if (places === null) {
             return result;
         }
 
@@ -856,30 +858,41 @@ const EngineeringFunctions = {
 
     OCT2HEX: (number, places) => {
         number = H.accept(number, Types.STRING);
-        places = H.accept(places, Types.NUMBER, false);
-        // if places is not an integer, it is truncated
-        places = Math.floor(places);
-        if (places < 0) {
-            throw FormulaError.NUM;
-        }
+        places = H.accept(places, Types.NUMBER_NO_BOOLEAN, null);
         if (number.length > 10) {
             throw FormulaError.NUM
         }
 
         // convert OCT to DEC
-        let toDecimal = parseInt(number, 8);
+        let toDecimal = EngineeringFunctions.OCT2DEC(number);
+
         // if number is negative, ignores places and return a 10-character octal number.
         if (toDecimal >= 536870912) {
             return 'ff' + (toDecimal + 3221225472).toString(16);
         }
 
         // convert DEC to HEX
-        let toHex = toDecimal.toString(16);
-        if (typeof places === 'undefined') {
-            return toHex;
-        }
+        let toHex = EngineeringFunctions.DEC2HEX(toDecimal,places);
 
-        return (places >= toHex.length) ? TextFunctions.REPT('0', places - toHex.length) + toHex : FormulaError.NUM;
+        if (places === null) {
+            return toHex;
+        } else {
+            // if places is not an integer, it is truncated
+            places = Math.trunc(places);
+
+            if (isNaN(places)){
+                throw FormulaError.VALUE;
+            }
+            if (places < 0) {
+                throw FormulaError.NUM;
+            }
+
+            if (places < toHex.length){
+                throw FormulaError.NUM;
+            } else {
+                return TextFunctions.REPT('0', places - toHex.length) + toHex;
+            }
+        }
     },
 };
 

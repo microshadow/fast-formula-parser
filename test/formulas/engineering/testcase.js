@@ -449,22 +449,49 @@ module.exports = {
     },
 
     IMSUM:{
-
+        'IMSUM("3+4i","5-3i")' : "8+i",
+        'IMSUM()' : "#VALUE!",
+        'IMSUM("3+4i","5-3i")' : "8+i",
+        'IMSUM("3+4i","5-3i")' : "8+i",
+        'IMSUM("3+4i","5-3i")' : "8+i",
+        'IMSUM("3+4i","5-3i")' : "8+i",
     },
 
     IMTAN:{
-
+        'IMTAN("4+3i")' : "0.004908258067495992+1.000709536067233i",
+        'IMTAN(TRUE)' : "#VALUE!",
+        'IMTAN(FALSE)' : "#VALUE!",
+        'IMTAN("24+72y")' : "#NUM!",
     },
 
     OCT2BIN:{
-
+        'OCT2BIN(3, 3)' : "011",
+        'OCT2BIN(7777777000)' : "1000000000",
+        'OCT2BIN(3, -3)' : "#NUM!",
+        'OCT2BIN(34565423412, 3)' : "#NUM!",
+        'OCT2BIN(3, 3)' : "011",
+        'OCT2BIN(3, 3)' : "011",
+        'OCT2BIN(3, 3)' : "011",
+        'OCT2BIN(3, 3)' : "011",
+        'OCT2BIN(3, 3)' : "011",
     },
 
     OCT2DEC:{
-
+        'OCT2DEC(54)' : 44,
+        'OCT2DEC(7777777533)' : -165,
+        'OCT2DEC(TRUE)' : "#VALUE!",
+        'OCT2DEC(54)' : 44,
+        'OCT2DEC(54)' : 44,
     },
 
     OCT2HEX:{
-
+        'OCT2HEX(100)' : "40",
+        'OCT2HEX(100, 4)' : "0040",
+        'OCT2HEX(520, 3)' : "150",
+        'OCT2HEX(520, -3)' : "#NUM!",
+        'OCT2HEX(520, 2)' : "#NUM!",
+        'OCT2HEX(100, -1)' : "#NUM!",
+        'OCT2HEX(100, 1)' : "#NUM!",
+        'OCT2HEX(7777777533)' : "FFFFFFFF5B",
     },
 };
