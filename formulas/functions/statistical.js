@@ -5,8 +5,42 @@ const jStat = require("jStat");
 const H = FormulaHelpers;
 
 const StatisticalFunctions = {
-    AVEDEV:() => {
+    AVEDEV: () => {
 
+    },
+
+    AVERAGE: (...ranges) => {
+        let sum = 0, total = 0, result;
+        H.flattenParams(ranges, null, true, (item) => {
+            if (typeof item === 'number'){
+                item = H.accept(item);
+                sum += item;
+                total += 1;
+            }
+
+            result = sum / total;
+        }, 1);
+
+        return result;
+    },
+
+    AVERAGEA: (...ranges) => {
+        let sum = 0, total = 0, result;
+        H.flattenParams(ranges, null, true, (item) => {
+            item = H.accept(item);
+            if (typeof item === 'string' || item === false){
+                item = 0;
+            }
+            if (item === true){
+                item = 1;
+            }
+            sum += item;
+            total += 1;
+
+            result = sum / total;
+        }, 1);
+
+        return result;
     },
 
     COUNT: (...ranges) => {
@@ -15,7 +49,7 @@ const StatisticalFunctions = {
             (item, info) => {
                 // literal will be parsed to Type.NUMBER
                 if (info.isLiteral && !isNaN(item)) {
-                   cnt++;
+                    cnt++;
                 } else {
                     if (typeof item === "number")
                         cnt++;

@@ -39,7 +39,7 @@ describe('Statistical Functions', function () {
                 let result = parser.parse(formula, {row: 1, col: 1});
                 if (result.result) result = result.result;
                 // console.log(`Testing ${formula}`);
-                expect(result, `${formula} should equal ${expected}\n`).to.equal(expected);
+                expect(result, `${formula} should equal ${expected}\n`).to.closeTo(expected, 0.000000001);
             })
         });
     });
