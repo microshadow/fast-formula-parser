@@ -1,46 +1,89 @@
 const FormulaError = require('../error');
-const {FormulaHelpers, Types, WildCard, Criteria} = require('../helpers');
+const {FormulaHelpers, Types, Criteria, Address} = require('../helpers');
 const {Infix} = require('../operators');
-const jStat = require("jStat");
 const H = FormulaHelpers;
+const {DistributionFunctions} = require('./distribution');
 
 const StatisticalFunctions = {
-    AVEDEV: () => {
-
-    },
-
-    AVERAGE: (...ranges) => {
-        let sum = 0, total = 0, result;
-        H.flattenParams(ranges, null, true, (item) => {
-            if (typeof item === 'number'){
-                item = H.accept(item);
+    AVEDEV: (...numbers) => {
+        let sum = 0;
+        const arr = [];
+        // parse number only if the input is literal
+        H.flattenParams(numbers, Types.NUMBER, true, (item, info) => {
+            if (typeof item === "number") {
                 sum += item;
-                total += 1;
+                arr.push(item);
             }
-
-            result = sum / total;
-        }, 1);
-
-        return result;
+        });
+        const avg = sum / arr.length;
+        sum = 0;
+        for (let i = 0; i < arr.length; i++) {
+            sum += Math.abs(arr[i] - avg);
+        }
+        return sum / arr.length;
     },
 
-    AVERAGEA: (...ranges) => {
-        let sum = 0, total = 0, result;
-        H.flattenParams(ranges, null, true, (item) => {
-            item = H.accept(item);
-            if (typeof item === 'string' || item === false){
-                item = 0;
+    AVERAGE: (...numbers) => {
+        let sum = 0, cnt = 0;
+        // parse number only if the input is literal
+        H.flattenParams(numbers, Types.NUMBER, true, (item, info) => {
+            if (typeof item === "number") {
+                sum += item;
+                cnt++;
             }
-            if (item === true){
-                item = 1;
+        });
+        return sum / cnt;
+    },
+
+    AVERAGEA: (...numbers) => {
+        let sum = 0, cnt = 0;
+        // parse number only if the input is literal
+        H.flattenParams(numbers, Types.NUMBER, true, (item, info) => {
+            const type = typeof item;
+            if (type === "number") {
+                sum += item;
+                cnt++;
+            } else if (type === "string") {
+                cnt++;
             }
-            sum += item;
-            total += 1;
+        });
+        return sum / cnt;
+    },
 
-            result = sum / total;
-        }, 1);
+    // special
+    AVERAGEIF: (context, range, criteria, averageRange) => {
+        const ranges = H.retrieveRanges(context, range, averageRange);
+        range = ranges[0];
+        averageRange = ranges[1];
 
-        return result;
+        criteria = H.retrieveArg(context, criteria);
+        const isCriteriaArray = criteria.isArray;
+        criteria = Criteria.parse(H.accept(criteria));
+
+        let sum = 0, cnt = 0;
+        range.forEach((row, rowNum) => {
+            row.forEach((value, colNum) => {
+                const valueToAdd = averageRange[rowNum][colNum];
+                if (typeof valueToAdd !== "number")
+                    return;
+                // wildcard
+                if (criteria.op === 'wc') {
+                    if (criteria.match === criteria.value.test(value)) {
+                        sum += valueToAdd;
+                        cnt++;
+                    }
+                } else if (Infix.compareOp(value, criteria.op, criteria.value, Array.isArray(value), isCriteriaArray)) {
+                    sum += valueToAdd;
+                    cnt++;
+                }
+            })
+        });
+        if (cnt === 0) throw FormulaError.DIV0;
+        return sum / cnt;
+    },
+
+    AVERAGEIFS: () => {
+
     },
 
     COUNT: (...ranges) => {
@@ -72,7 +115,7 @@ const StatisticalFunctions = {
             row.forEach(value => {
                 // wildcard
                 if (criteria.op === 'wc') {
-                    if (criteria.value.test(value))
+                    if (criteria.match === criteria.value.test(value))
                         cnt++;
                 } else if (Infix.compareOp(value, criteria.op, criteria.value, Array.isArray(value), isCriteriaArray)) {
                     cnt++;
@@ -84,4 +127,5 @@ const StatisticalFunctions = {
 
 };
 
-module.exports = StatisticalFunctions;
+
+module.exports = Object.assign(StatisticalFunctions, DistributionFunctions);

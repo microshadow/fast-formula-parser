@@ -1,8 +1,10 @@
 const FormulaError = require('../error');
 const ReferenceFunctions = require('./reference');
-const {FormulaHelpers, Types, Factorials, Criteria} = require('../helpers');
+const {FormulaHelpers, Types, Factorials, Criteria, Address} = require('../helpers');
 const {Infix} = require('../operators');
 const H = FormulaHelpers;
+
+// Max number in excel is 2^1024-1, same as javascript, thus I will not check if number is valid in some functions.
 
 // factorials
 const f = [], fd = [];
@@ -33,8 +35,8 @@ const MathFunctions = {
     },
 
     AGGREGATE: (functionNum, options, ref1, ...refs) => {
-        functionNum = H.accept(functionNum, Types.NUMBER);
-        throw FormulaError.NOT_IMPLEMENTED('AGGREGATE');
+        // functionNum = H.accept(functionNum, Types.NUMBER);
+        // throw FormulaError.NOT_IMPLEMENTED('AGGREGATE');
     },
 
     ARABIC: text => {
@@ -64,26 +66,24 @@ const MathFunctions = {
         return r;
     },
 
-    BASE: (number, radix, minLength = 0) => {
+    BASE: (number, radix, minLength) => {
         number = H.accept(number, Types.NUMBER);
-        if (number < 0 || number > 2 ** 53)
+        if (number < 0 || number >= 2 ** 53)
             throw FormulaError.NUM;
         radix = H.accept(radix, Types.NUMBER);
         if (radix < 2 || radix > 36)
             throw FormulaError.NUM;
-        minLength = H.accept(minLength, Types.NUMBER);
-        if (!minLength && minLength < 0) {
+        minLength = H.accept(minLength, Types.NUMBER, 0);
+        if (minLength < 0) {
             throw FormulaError.NUM;
         }
 
-        const result = number.toString(radix);
+        const result = number.toString(radix).toUpperCase();
         return new Array(Math.max(minLength + 1 - result.length, 0)).join('0') + result;
     },
 
     CEILING: (number, significance) => {
         number = H.accept(number, Types.NUMBER);
-        if (number >= 9.99E+307 || number <= -2.229E+308)
-            throw FormulaError.NUM;
         significance = H.accept(significance, Types.NUMBER);
         if (significance === 0)
             return 0;
@@ -102,8 +102,6 @@ const MathFunctions = {
 
     'CEILING.MATH': (number, significance, mode) => {
         number = H.accept(number, Types.NUMBER);
-        if (number >= 9.99E+307 || number <= -2.229E+308)
-            throw FormulaError.NUM;
         significance = H.accept(significance, Types.NUMBER, number > 0 ? 1 : -1);
         // mode can be any number
         mode = H.accept(mode, Types.NUMBER, 0);
@@ -149,7 +147,10 @@ const MathFunctions = {
         radix = Math.trunc(radix);
         if (radix < 2 || radix > 36)
             throw FormulaError.NUM;
-        return parseInt(text, radix);
+        const res = parseInt(text, radix);
+        if (isNaN(res))
+            throw FormulaError.NUM;
+        return res;
     },
 
     DEGREES: (radians) => {
@@ -168,30 +169,28 @@ const MathFunctions = {
 
     FACT: (number) => {
         number = H.accept(number, Types.NUMBER);
+        number = Math.trunc(number);
         // max number = 170
         if (number > 170 || number < 0)
             throw FormulaError.NUM;
         if (number <= 100)
             return Factorials[number];
-        number = Math.trunc(number);
         return factorial(number);
     },
 
     FACTDOUBLE: (number) => {
         number = H.accept(number, Types.NUMBER);
+        number = Math.trunc(number);
         // max number = 170
         if (number < -1)
             throw FormulaError.NUM;
         if (number === -1)
             return 1;
-        number = Math.trunc(number);
         return factorialDouble(number);
     },
 
     FLOOR: (number, significance) => {
         number = H.accept(number, Types.NUMBER);
-        if (number >= 9.99E+307 || number <= -2.229E+308)
-            throw FormulaError.NUM;
         significance = H.accept(significance, Types.NUMBER);
         if (significance === 0)
             return 0;
@@ -213,8 +212,6 @@ const MathFunctions = {
 
     'FLOOR.MATH': (number, significance, mode) => {
         number = H.accept(number, Types.NUMBER);
-        if (number >= 9.99E+307 || number <= -2.229E+308)
-            throw FormulaError.NUM;
         significance = H.accept(significance, Types.NUMBER, number > 0 ? 1 : -1);
 
         // mode can be 0 or any other number, 0 means away from zero
@@ -225,9 +222,8 @@ const MathFunctions = {
             // away from zero
             return MathFunctions.FLOOR(number, Math.abs(significance));
         }
-        // if away from zero, add a significance
-        const offset = mode ? significance : 0;
-        return MathFunctions.FLOOR(number, significance) + offset;
+        // towards zero, add a significance
+        return MathFunctions.FLOOR(number, significance) + significance;
     },
 
     'FLOOR.PRECISE': (number, significance) => {
@@ -272,7 +268,7 @@ const MathFunctions = {
     },
 
     'ISO.CEILING': (...params) => {
-        return MathFunctions['CEILING.PRECISE'](params);
+        return MathFunctions['CEILING.PRECISE'](...params);
     },
 
     LCM: (...params) => {
@@ -393,21 +389,52 @@ const MathFunctions = {
 
     },
 
-    // TODO: Start from here.
-    MROUND: () => {
-
+    MROUND: (number, multiple) => {
+        number = H.accept(number, Types.NUMBER);
+        multiple = H.accept(multiple, Types.NUMBER);
+        if (multiple === 0)
+            return 0;
+        if (number > 0 && multiple < 0 || number < 0 && multiple > 0)
+            throw FormulaError.NUM;
+        if (number / multiple % 1 === 0)
+            return number;
+        return Math.round(number / multiple) * multiple;
     },
 
-    MULTINOMIAL: () => {
-
+    MULTINOMIAL: (...numbers) => {
+        let numerator = 0, denominator = 1;
+        H.flattenParams(numbers, Types.NUMBER, false, number => {
+            if (number < 0)
+                throw FormulaError.NUM;
+            numerator += number;
+            denominator *= factorial(number);
+        });
+        return factorial(numerator) / denominator;
     },
 
-    MUNIT: () => {
-
+    MUNIT: (dimension) => {
+        dimension = H.accept(dimension, Types.NUMBER);
+        const matrix = [];
+        for (let row = 0; row < dimension; row++) {
+            const rowArr = [];
+            for (let col = 0; col < dimension; col++) {
+                if (row === col)
+                    rowArr.push(1);
+                else
+                    rowArr.push(0);
+            }
+            matrix.push(rowArr);
+        }
+        return matrix;
     },
 
-    ODD: () => {
-
+    ODD: (number) => {
+        number = H.accept(number, Types.NUMBER);
+        if (number === 0)
+            return 1;
+        let temp = Math.ceil(Math.abs(number));
+        temp = (temp & 1) ? temp : temp + 1;
+        return (number > 0) ? temp : -temp;
     },
 
     PI: () => {
@@ -420,17 +447,55 @@ const MathFunctions = {
         return number ** power;
     },
 
-    PRODUCT: () => {
-
+    PRODUCT: (...numbers) => {
+        let product = 1;
+        H.flattenParams(numbers, null, true, (number, info) => {
+            const parsedNumber = Number(number);
+            if (info.isLiteral && !isNaN(parsedNumber)) {
+                product *= parsedNumber;
+            } else {
+                if (typeof number === "number")
+                    product *= number;
+            }
+        }, 1);
+        return product;
     },
 
-    QUOTIENT: () => {
-
+    QUOTIENT: (numerator, denominator) => {
+        numerator = H.accept(numerator, Types.NUMBER);
+        denominator = H.accept(denominator, Types.NUMBER);
+        return Math.trunc(numerator / denominator);
     },
 
     RADIANS: (degrees) => {
         degrees = H.accept(degrees, Types.NUMBER);
         return degrees / 180 * Math.PI;
+    },
+
+    RAND: () => {
+        return Math.random();
+    },
+
+    RANDBETWEEN: (bottom, top) => {
+        bottom = H.accept(bottom, Types.NUMBER);
+        top = H.accept(top, Types.NUMBER);
+        return Math.floor(Math.random() * (top - bottom + 1) + bottom);
+    },
+
+    ROMAN: (number, form) => {
+        number = H.accept(number, Types.NUMBER);
+        form = H.accept(form, Types.NUMBER, 0);
+        if (form !== 0)
+            throw Error('ROMAN: only allows form=0 (classic form).');
+        // The MIT License
+        // Copyright (c) 2008 Steven Levithan
+        const digits = String(number).split('');
+        const key = ['', 'C', 'CC', 'CCC', 'CD', 'D', 'DC', 'DCC', 'DCCC', 'CM', '', 'X', 'XX', 'XXX', 'XL', 'L', 'LX', 'LXX', 'LXXX', 'XC', '', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX'];
+        let roman = '', i = 3;
+        while (i--) {
+            roman = (key[+digits.pop() + (i * 10)] || '') + roman;
+        }
+        return new Array(+digits.join('') + 1).join('M') + roman;
     },
 
     ROUND: (number, digits) => {
@@ -484,6 +549,48 @@ const MathFunctions = {
         }
     },
 
+    SERIESSUM: (x, n, m, coefficients) => {
+        x = H.accept(x, Types.NUMBER);
+        n = H.accept(n, Types.NUMBER);
+        m = H.accept(m, Types.NUMBER);
+        let i = 0, result;
+        H.flattenParams([coefficients], Types.NUMBER, false, (coefficient) => {
+            if (typeof coefficient !== "number") {
+                throw FormulaError.VALUE;
+            }
+            if (i === 0) {
+                result = coefficient * Math.pow(x, n);
+            } else {
+                result += coefficient * Math.pow(x, n + i * m);
+            }
+            i++;
+        });
+        return result;
+    },
+
+    SIGN: number => {
+        number = H.accept(number, Types.NUMBER);
+        return number > 0 ? 1 : number === 0 ? 0 : -1;
+    },
+
+    SQRT: number => {
+        number = H.accept(number, Types.NUMBER);
+        if (number < 0)
+            throw FormulaError.NUM;
+        return Math.sqrt(number);
+    },
+
+    SQRTPI: number => {
+        number = H.accept(number, Types.NUMBER);
+        if (number < 0)
+            throw FormulaError.NUM;
+        return Math.sqrt(number * Math.PI);
+    },
+
+    SUBTOTAL: () => {
+        // TODO: Finish this after statistical functions are implemented.
+    },
+
     SUM: (...params) => {
         // parse string to number only when it is a literal. (not a reference)
         let result = 0;
@@ -504,52 +611,14 @@ const MathFunctions = {
      * This functions requires instance of {@link FormulaParser}.
      */
     SUMIF: (context, range, criteria, sumRange) => {
-        // process args
-        if (sumRange != null) {
-            let rowOffset, colOffset;
-            if (H.isCellRef(range)) {
-                rowOffset = 0;
-                colOffset = 0;
-            } else if (H.isRangeRef(range)) {
-                rowOffset = range.ref.to.row - range.ref.from.row;
-                colOffset = range.ref.to.col - range.ref.from.col;
-            } else throw Error('SUMIF should not reach here.');
-            // if sum range is a cell reference
-            if (H.isCellRef(sumRange)) {
-                if (rowOffset > 0 || colOffset > 0)
-                    sumRange = {
-                        ref: {
-                            from: {col: sumRange.ref.col, row: sumRange.ref.row},
-                            to: {row: sumRange.ref.row + rowOffset, col: sumRange.ref.col + colOffset}
-                        }
-                    };
-            } else {
-                // sum range is a range reference
-                sumRange.ref.to.row = sumRange.ref.from.row + rowOffset;
-                sumRange.ref.to.col = sumRange.ref.from.col + colOffset;
-            }
-        }
+        const ranges = H.retrieveRanges(context, range, sumRange);
+        range = ranges[0];
+        sumRange = ranges[1];
 
-        // retrieve values
-        range = context.utils.extractRefValue(range);
-        range = {value: range.val, isArray: range.isArray};
-        range = H.accept(range, Types.ARRAY, undefined, false, true);
-
-        if (sumRange == null) {
-            sumRange = range;
-        } else {
-            sumRange = context.utils.extractRefValue(sumRange);
-            sumRange = {value: sumRange.val, isArray: sumRange.isArray};
-            sumRange = H.accept(sumRange, Types.ARRAY, undefined, false, true);
-        }
-
-        criteria = context.utils.extractRefValue(criteria);
+        criteria = H.retrieveArg(context, criteria);
         const isCriteriaArray = criteria.isArray;
-        criteria = {value: criteria.val, isArray: criteria.isArray};
-        criteria = H.accept(criteria);
-
         // parse criteria
-        criteria = Criteria.parse(criteria);
+        criteria = Criteria.parse(H.accept(criteria));
         let sum = 0;
 
         range.forEach((row, rowNum) => {
@@ -559,7 +628,7 @@ const MathFunctions = {
                     return;
                 // wildcard
                 if (criteria.op === 'wc') {
-                    if (criteria.value.test(value)) {
+                    if (criteria.match === criteria.value.test(value)) {
                         sum += valueToAdd;
                     }
 
@@ -571,6 +640,9 @@ const MathFunctions = {
         return sum;
     },
 
+    SUMIFS: () => {
+
+    },
 
     SUMPRODUCT: (array1, ...arrays) => {
         array1 = H.accept(array1, Types.ARRAY, undefined, false, true);
@@ -597,6 +669,81 @@ const MathFunctions = {
         });
 
         return result;
+    },
+
+    SUMSQ: (...params) => {
+        // parse string to number only when it is a literal. (not a reference)
+        let result = 0;
+        H.flattenParams(params, Types.NUMBER, true,
+            (item, info) => {
+                // literal will be parsed to given type (Type.NUMBER)
+                if (info.isLiteral) {
+                    result += item ** 2;
+                } else {
+                    if (typeof item === "number")
+                        result += item ** 2;
+                }
+            });
+        return result
+    },
+
+    SUMX2MY2: (arrayX, arrayY) => {
+        const x = [], y = [];
+        let sum = 0;
+        H.flattenParams([arrayX], null, false, (item, info) => {
+            x.push(item);
+        });
+        H.flattenParams([arrayY], null, false, (item, info) => {
+            y.push(item);
+        });
+        if (x.length !== y.length)
+            throw FormulaError.NA;
+        for (let i = 0; i < x.length; i++) {
+            if (typeof x[i] === "number" && typeof y[i] === "number")
+                sum += x[i] ** 2 - y[i] ** 2
+        }
+        return sum;
+    },
+
+    SUMX2PY2: (arrayX, arrayY) => {
+        const x = [], y = [];
+        let sum = 0;
+        H.flattenParams([arrayX], null, false, (item, info) => {
+            x.push(item);
+        });
+        H.flattenParams([arrayY], null, false, (item, info) => {
+            y.push(item);
+        });
+        if (x.length !== y.length)
+            throw FormulaError.NA;
+        for (let i = 0; i < x.length; i++) {
+            if (typeof x[i] === "number" && typeof y[i] === "number")
+                sum += x[i] ** 2 + y[i] ** 2
+        }
+        return sum;
+    },
+
+    SUMXMY2: (arrayX, arrayY) => {
+        const x = [], y = [];
+        let sum = 0;
+        H.flattenParams([arrayX], null, false, (item, info) => {
+            x.push(item);
+        });
+        H.flattenParams([arrayY], null, false, (item, info) => {
+            y.push(item);
+        });
+        if (x.length !== y.length)
+            throw FormulaError.NA;
+        for (let i = 0; i < x.length; i++) {
+            if (typeof x[i] === "number" && typeof y[i] === "number")
+                sum += (x[i] - y[i]) ** 2;
+        }
+        return sum;
+    },
+
+    TRUNC: (number) => {
+        number = H.accept(number, Types.NUMBER);
+        return Math.trunc(number);
     },
 };
 

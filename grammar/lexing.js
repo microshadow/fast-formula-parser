@@ -1,4 +1,4 @@
-const {Lexer, createToken} = require("chevrotain");
+const {createToken, Lexer} = require('chevrotain');
 
 // the vocabulary will be exported and used in the Parser definition.
 const tokenVocabulary = {};
@@ -39,8 +39,8 @@ const ExcelConditionalRefFunction = createToken({
     pattern: /(IF|CHOOSE)\(/i
 });
 
-const FormulaError = createToken({
-    name: 'FormulaError',
+const FormulaErrorT = createToken({
+    name: 'FormulaErrorT',
     pattern: /#NULL!|#DIV\/0!|#VALUE!|#NAME\?|#NUM!|#N\/A/
 });
 
@@ -136,7 +136,7 @@ const ExclamationMark = createToken({
     pattern: /!/
 });
 
-const OpenCurlyParen  = createToken({
+const OpenCurlyParen = createToken({
     name: 'OpenCurlyParen',
     pattern: /{/
 });
@@ -227,7 +227,7 @@ const allTokens = [
     ExcelRefFunction,
     ExcelConditionalRefFunction,
     Function,
-    FormulaError,
+    FormulaErrorT,
     RefError,
     Sheet,
     Cell,
@@ -265,7 +265,7 @@ const allTokens = [
     LtOp,
 ];
 
-const SelectLexer = new Lexer(allTokens, { ensureOptimizations: true });
+const SelectLexer = new Lexer(allTokens, {ensureOptimizations: true});
 
 allTokens.forEach(tokenType => {
     tokenVocabulary[tokenType.name] = tokenType
@@ -274,7 +274,7 @@ allTokens.forEach(tokenType => {
 module.exports = {
     tokenVocabulary: tokenVocabulary,
 
-    lex: function(inputText) {
+    lex: function (inputText) {
         const lexingResult = SelectLexer.tokenize(inputText)
 
         if (lexingResult.errors.length > 0) {

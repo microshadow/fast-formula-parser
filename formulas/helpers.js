@@ -92,6 +92,8 @@ class FormulaHelpers {
         }
         // "123" -> 123
         else if (typeof obj === 'string') {
+            if (obj.length === 0)
+                throw FormulaError.VALUE;
             number = Number(obj);
             if (isNaN(number))
                 throw FormulaError.VALUE;
@@ -117,7 +119,7 @@ class FormulaHelpers {
      * @see {@link FormulaHelpers.accept}
      * @param {Array} params - Parameter that needs to flatten.
      * @param {Types|null} valueType - The type each item should be,
-     *                          ull if allows any type.
+     *                          null if allows any type. This only applies to literals.
      * @param {boolean} allowUnion - Allow union, e.g. (A1:C1, E4:F3)
      * @param {function} hook - Invoked after parsing each item.
      *                         of the array.
@@ -300,7 +302,39 @@ class FormulaHelpers {
     isCellRef(param) {
         return param.ref && !param.ref.from;
     }
+
+    /**
+     * Helper function for SUMIF, AVERAGEIF,...
+     * @param context
+     * @param range1
+     * @param range2
+     */
+    retrieveRanges(context, range1, range2) {
+        // process args
+        range2 = Address.extend(range1, range2);
+
+        // retrieve values
+        range1 = this.retrieveArg(context, range1);
+        range1 = H.accept(range1, Types.ARRAY, undefined, false, true);
+
+        if (range2 !== range1) {
+            range2 = this.retrieveArg(context, range2);
+            range2 = H.accept(range2, Types.ARRAY, undefined, false, true);
+        } else
+            range2 = range1;
+
+        return [range1, range2];
+    }
+
+    retrieveArg(context, arg) {
+        if (arg === null)
+            return {value: 0, isArray: false, omitted: true};
+        const res = context.utils.extractRefValue(arg);
+        return {value: res.val, isArray: res.isArray, ref: arg.ref};
+    }
 }
+
+const H = new FormulaHelpers();
 
 const WildCard = {
     /**
@@ -353,8 +387,11 @@ const Criteria = {
                         // formula error
                         value = new FormulaError(res[2]);
                     } else {
-                        // string
+                        // string, can be wildcard
                         value = res[2];
+                        if (WildCard.isWildCard(value)) {
+                            return {op: 'wc', value: WildCard.toRegex(value), match: op === '='}
+                        }
                     }
                 } else {
                     // number
@@ -363,7 +400,7 @@ const Criteria = {
                 return {op, value};
 
             } else if (WildCard.isWildCard(criteria)) {
-                return {op: 'wc', value: WildCard.toRegex(criteria)}
+                return {op: 'wc', value: WildCard.toRegex(criteria), match: true}
             } else {
                 return {op: '=', value: criteria}
             }
@@ -404,10 +441,46 @@ const Address = {
         }
         return number;
     },
+
+    /**
+     * Extend range2 to match with the dimension in range1.
+     * @param {{ref: {}}} range1
+     * @param {{ref: {}}} [range2]
+     */
+    extend: (range1, range2) => {
+        if (range2 == null) {
+            return range1;
+        }
+        let rowOffset, colOffset;
+        if (H.isCellRef(range1)) {
+            rowOffset = 0;
+            colOffset = 0;
+        } else if (H.isRangeRef(range1)) {
+            rowOffset = range1.ref.to.row - range1.ref.from.row;
+            colOffset = range1.ref.to.col - range1.ref.from.col;
+        } else throw Error('Address.extend should not reach here.');
+        // if range2 is a cell reference
+        if (H.isCellRef(range2)) {
+            if (rowOffset > 0 || colOffset > 0)
+                range2 = {
+                    ref: {
+                        from: {col: range2.ref.col, row: range2.ref.row},
+                        to: {row: range2.ref.row + rowOffset, col: range2.ref.col + colOffset}
+                    }
+                };
+        } else {
+            // range2 is a range reference
+            range2.ref.to.row = range2.ref.from.row + rowOffset;
+            range2.ref.to.col = range2.ref.from.col + colOffset;
+        }
+        return range2;
+    },
+
+
 };
 
 module.exports = {
-    FormulaHelpers: new FormulaHelpers(),
+    FormulaHelpers: H,
     Types,
     ParamsTypes,
     ReversedTypes,
